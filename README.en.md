@@ -39,7 +39,7 @@ The script currently performs the following checks:
 ## Installation
 
 1.  Make sure you have Python 3 installed on your system.
-2.  Clone this repository or download the `security_checker.py` and `requirements.txt` files.
+2.  Clone this repository or download the `security_analyzer.py` and `requirements.txt` files.
 3.  Install the necessary dependencies using pip:
 
     ```bash
@@ -51,7 +51,7 @@ The script currently performs the following checks:
 To analyze a website, run the script from your terminal, passing the URL or domain name as an argument.
 
 ```bash
-python3 security_checker.py google.com
+python3 security_analyzer.py google.com
 ```
 
 ### Example Output
@@ -79,7 +79,7 @@ Analyzing host: google.com
 
 This project also includes a dedicated tool for calculating the "parking score" of a domain name. This score, on a scale of 0 to 100, evaluates the probability that a domain is "parked" (i.e., registered but not used for an active website, often displaying ads or a "for sale" page).
 
-This score is automatically calculated and included in the main report of `security_checker.py`, but the `parking_scorer.py` script can also be used independently for a quick and targeted analysis.
+This score is automatically calculated and included in the main report of `security_analyzer.py`, but the `parking_scorer.py` script can also be used independently for a quick and targeted analysis.
 
 ### Standalone Usage
 
@@ -118,11 +118,11 @@ In addition to the main scanner, this project includes `consolidator.py`, a powe
 
 ### Generating Reports
 
-For the consolidator to work, it needs data. Run `security_checker.py` using the `--formats json` argument to generate a JSON report. The script will automatically name the file (`<domain>_<date>.json`) and place it in the current directory.
+For the consolidator to work, it needs data. Run `security_analyzer.py` using the `--formats json` argument to generate a JSON report. The script will automatically name the file (`<domain>_<date>.json`) and place it in the current directory.
 
 ```bash
 # Run the scan and generate the JSON report
-python3 security_checker.py yoursite.com --formats json
+python3 security_analyzer.py yoursite.com --formats json
 
 # Move the report to the scans directory
 mv yoursite.com_180825.json scans/

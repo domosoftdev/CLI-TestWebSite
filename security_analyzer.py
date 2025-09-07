@@ -32,7 +32,7 @@ import whois
 from parking_scorer import calculerScoreParking
 from datetime import timedelta
 import uuid
-from gdpr_checker import GDPRChecker
+from gdpr_analyzer import GDPRChecker
 
 SEVERITY_SCORES = {
     "CRITICAL": 10,

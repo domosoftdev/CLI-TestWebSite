@@ -112,6 +112,26 @@ def analyserContenu(domaine: str, verbose: bool = False) -> int:
             break
     if not found_generic_keyword and verbose: print("  [-] Aucun mot-clé de parking générique trouvé.")
 
+    # 🔍 Analyse du titre
+    if "<title>" in page_html.lower():
+        try:
+            title = page_html.lower().split("<title>")[1].split("</title>")[0]
+            if any(t in title for t in ["domain for sale", "welcome", "buy now"]):
+                if verbose: print(f"  [+] Titre suspect détecté ('{title}') : +5 pts")
+                score += 5
+        except Exception:
+            pass
+
+    # 🖼️ Favicon générique
+    if "favicon.ico" in page_html.lower():
+        if verbose: print("  [+] Favicon générique détecté : +3 pts")
+        score += 3
+
+    # 📏 Volume de texte faible
+    if len(all_text.split()) < 100:
+        if verbose: print("  [+] Volume de texte faible (<100 mots) : +5 pts")
+        score += 5
+
     # Analyse des classes CSS
     found_css_keyword = False
     for element in soup.find_all(class_=True):
