@@ -10,105 +10,98 @@ from parking_scorer import (
     analyserTechnique,
     analyserContextuel,
     calculerScoreParking,
-    KNOWN_PARKING_HOSTNAMES,
-    KNOWN_PARKING_NAMESERVERS
+    KNOWN_PARKING_NAMESERVERS,
 )
 
 class TestParkingScorer(unittest.TestCase):
 
-    # --- Tests for analyserContenu ---
+    # --- Tests for the new, corrected analyserContenu logic ---
 
     @patch('parking_scorer.requests.Session.get')
-    def test_analyserContenu_redirect_to_known_parking(self, mock_get):
-        """Should return 25 if redirected to a known parking hostname (20) and has low text volume (5)."""
+    def test_analyserContenu_clean_site(self, mock_get):
+        """Should return a score of 0 for a legitimate site with sufficient content."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.url = f"https://{KNOWN_PARKING_HOSTNAMES[0]}/some-path"
-        mock_response.text = "<html><body>Parked</body></html>"
+        long_content = " ".join(["word"] * 50)
+        mock_response.text = f"<html><title>Legitimate Site</title><body>{long_content}</body></html>"
         mock_get.return_value = mock_response
-
-        score = analyserContenu("parked-domain.com")
-        self.assertEqual(score, 25)
-
-    @patch('parking_scorer.requests.Session.get')
-    def test_analyserContenu_for_sale_keywords(self, mock_get):
-        """Should return 15 for 'for sale' keywords (10) and low text volume (5)."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.url = "https://some-domain.com"
-        mock_response.text = "<html><title>A premium domain</title><body>This domain is for sale.</body></html>"
-        mock_get.return_value = mock_response
-
-        score = analyserContenu("forsale-domain.com")
-        self.assertEqual(score, 15)
-
-    @patch('parking_scorer.requests.Session.get')
-    def test_analyserContenu_generic_parking_keywords(self, mock_get):
-        """Should return 15 for generic parking keywords (10) and low text volume (5)."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.url = "https://another-domain.com"
-        mock_response.text = "<html><body>This page is under construction.</body></html>"
-        mock_get.return_value = mock_response
-
-        score = analyserContenu("generic-parked-domain.com")
-        self.assertEqual(score, 15)
-
-    @patch('parking_scorer.requests.Session.get')
-    def test_analyserContenu_both_keywords_types(self, mock_get):
-        """Should return 15, accepting the observed behavior."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.url = "https://another-domain.com"
-        mock_response.text = "<html><title>My Awesome Domain</title><body>This domain is for sale and is under construction.</body></html>"
-        mock_get.return_value = mock_response
-
-        score = analyserContenu("double-keyword-domain.com")
-        self.assertEqual(score, 15)
-
-    @patch('parking_scorer.requests.Session.get')
-    def test_analyserContenu_no_keywords(self, mock_get):
-        """Should return 5 for a normal website with low text volume."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.url = "https://legit-site.com"
-        mock_response.text = "<html><title>My Website</title><body>Welcome to my page.</body></html>"
-        mock_get.return_value = mock_response
-
         score = analyserContenu("legit-site.com")
-        self.assertEqual(score, 5)
+        self.assertEqual(score, 0)
+
+    @patch('parking_scorer.requests.Session.get')
+    def test_analyserContenu_low_content_penalty(self, mock_get):
+        """Should return a score of 20 for a site with very little content."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "<html><title>Empty</title><body>Hello world.</body></html>"
+        mock_get.return_value = mock_response
+        score = analyserContenu("low-content-site.com")
+        self.assertEqual(score, 20)
+
+    @patch('parking_scorer.requests.Session.get')
+    def test_analyserContenu_for_sale_in_title(self, mock_get):
+        """Should return a high score for a 'for sale' keyword in the title."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "<html><title>This domain is for sale</title><body>Check it out.</body></html>"
+        mock_get.return_value = mock_response
+        score = analyserContenu("sale-in-title.com")
+        # 25 (title) + 10 (sale content) + 20 (low content) = 55
+        self.assertEqual(score, 55)
+
+    @patch('parking_scorer.requests.Session.get')
+    def test_analyserContenu_for_sale_in_content(self, mock_get):
+        """Should return a score for a 'for sale' keyword in the body."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "<html><title>My Site</title><body>This valuable domain is for sale.</body></html>"
+        mock_get.return_value = mock_response
+        score = analyserContenu("sale-in-content.com")
+        self.assertEqual(score, 30) # 10 (content) + 20 (low content)
+
+    @patch('parking_scorer.requests.Session.get')
+    def test_analyserContenu_generic_parking_keyword(self, mock_get):
+        """Should return a score for a generic parking keyword."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "<html><title>Coming Soon</title><body>This page is under construction.</body></html>"
+        mock_get.return_value = mock_response
+        score = analyserContenu("generic-parked.com")
+        self.assertEqual(score, 28) # 8 (generic keyword) + 20 (low content)
+
+    @patch('parking_scorer.requests.Session.get')
+    def test_analyserContenu_parking_service_mention(self, mock_get):
+        """Should return a score for mentioning a parking service."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "<html><title>My Site</title><body>This domain is parked with sedo.com.</body></html>"
+        mock_get.return_value = mock_response
+        score = analyserContenu("service-mention.com")
+        # "sedo" is in KEYWORDS_FOR_SALE (+10)
+        # "This domain is parked" is in KEYWORDS_PARKING_GENERIC (+8)
+        # "sedo.com" is in PARKING_SERVICES (+15)
+        # low content (+20)
+        # Total = 53
+        self.assertEqual(score, 53)
+
+    @patch('parking_scorer.requests.Session.get')
+    def test_analyserContenu_all_signals(self, mock_get):
+        """Should return a high score when all signals are present."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "<html><title>domain for sale</title><body>Parked by sedo.com. This domain is available.</body></html>"
+        mock_get.return_value = mock_response
+        score = analyserContenu("all-signals.com")
+        # 25 (title) + 10 (sale content: "domain is available") + 15 (service: "sedo.com") + 20 (low content) = 70
+        self.assertEqual(score, 70)
 
     @patch('parking_scorer.requests.Session.get', side_effect=requests.exceptions.RequestException)
     def test_analyserContenu_connection_fails(self, mock_get):
-        """Should return 5 if all connection attempts fail."""
+        """Should return a score of 20 if connection fails (treated as minimal content)."""
         score = analyserContenu("unreachable-site.com")
-        self.assertEqual(score, 5)
-
-    @patch('parking_scorer.requests.Session.get')
-    def test_analyserContenu_css_class_check(self, mock_get):
-        """Should return 15 for parking CSS class (10) and low text volume (5)."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.url = "https://css-parked.com"
-        mock_response.text = '<html><body><div class="for-sale-banner">Some neutral text</div></body></html>'
-        mock_get.return_value = mock_response
-
-        score = analyserContenu("css-parked.com")
-        self.assertEqual(score, 15)
-
-    @patch('parking_scorer.requests.Session.get')
-    def test_analyserContenu_script_source_check(self, mock_get):
-        """Should return 20 for parking script src (15) and low text volume (5)."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.url = "https://script-parked.com"
-        mock_response.text = f'<html><body><script src="//{KNOWN_PARKING_HOSTNAMES[0]}/tracker.js"></script></body></html>'
-        mock_get.return_value = mock_response
-
-        score = analyserContenu("script-parked.com")
         self.assertEqual(score, 20)
 
-    # --- Tests for analyserTechnique ---
+    # --- Tests for analyserTechnique (Unchanged) ---
 
     @patch('parking_scorer.dns.resolver.Resolver.resolve')
     def test_analyserTechnique_known_ns_and_wildcard(self, mock_resolve):
@@ -135,7 +128,7 @@ class TestParkingScorer(unittest.TestCase):
         score = analyserTechnique("non-existent-domain.com")
         self.assertEqual(score, 0)
 
-    # --- Tests for analyserContextuel ---
+    # --- Tests for analyserContextuel (Unchanged) ---
 
     @patch('parking_scorer.whois.whois')
     def test_analyserContextuel_all_signals(self, mock_whois):
@@ -155,7 +148,7 @@ class TestParkingScorer(unittest.TestCase):
         score = analyserContextuel("whois-error.com")
         self.assertEqual(score, 0)
 
-    # --- Test for calculerScoreParking ---
+    # --- Test for calculerScoreParking (Unchanged) ---
 
     @patch('parking_scorer.analyserContenu')
     @patch('parking_scorer.analyserTechnique')
@@ -170,9 +163,9 @@ class TestParkingScorer(unittest.TestCase):
         self.assertEqual(score, 45)
 
         # Scenario 2: Score exceeds 100, should be capped.
-        mock_contenu.return_value = 40
-        mock_technique.return_value = 35
-        mock_contextuel.return_value = 30
+        mock_contenu.return_value = 50
+        mock_technique.return_value = 30
+        mock_contextuel.return_value = 25 # Total is 105
         score = calculerScoreParking("max-score-domain.com")
         self.assertEqual(score, 100)
 
