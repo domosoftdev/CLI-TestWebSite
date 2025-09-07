@@ -39,7 +39,7 @@ Le script effectue actuellement les vérifications suivantes :
 ## Installation
 
 1.  Assurez-vous d'avoir Python 3 installé sur votre système.
-2.  Clonez ce dépôt ou téléchargez les fichiers `security_checker.py` et `requirements.txt`.
+2.  Clonez ce dépôt ou téléchargez les fichiers `security_analyzer.py` et `requirements.txt`.
 3.  Installez les dépendances nécessaires en utilisant pip :
 
     ```bash
@@ -51,7 +51,7 @@ Le script effectue actuellement les vérifications suivantes :
 Pour analyser un site web, exécutez le script depuis votre terminal en lui passant l'URL ou le nom de domaine comme argument.
 
 ```bash
-python3 security_checker.py google.com
+python3 security_analyzer.py google.com
 ```
 
 ### Exemple de sortie
@@ -79,7 +79,7 @@ Analyse de l'hôte : google.com
 
 Ce projet inclut également un outil dédié au calcul du "score de parking" d'un nom de domaine. Ce score, sur une échelle de 0 à 100, évalue la probabilité qu'un domaine soit "parké" (c'est-à-dire enregistré mais non utilisé pour un site web actif, affichant souvent des publicités ou une page "à vendre").
 
-Ce score est automatiquement calculé et inclus dans le rapport principal de `security_checker.py`, mais le script `parking_scorer.py` peut aussi être utilisé de manière indépendante pour une analyse rapide et ciblée.
+Ce score est automatiquement calculé et inclus dans le rapport principal de `security_analyzer.py`, mais le script `parking_scorer.py` peut aussi être utilisé de manière indépendante pour une analyse rapide et ciblée.
 
 ### Utilisation autonome
 
@@ -118,11 +118,11 @@ En plus du scanner principal, ce projet inclut `consolidator.py`, un outil puiss
 
 ### Génération des Rapports
 
-Pour que le consolidateur fonctionne, il a besoin de données. Exécutez `security_checker.py` en utilisant l'argument `--formats json` pour générer un rapport JSON. Le script nommera automatiquement le fichier (`<domaine>_<date>.json`) et le placera dans le répertoire courant.
+Pour que le consolidateur fonctionne, il a besoin de données. Exécutez `security_analyzer.py` en utilisant l'argument `--formats json` pour générer un rapport JSON. Le script nommera automatiquement le fichier (`<domaine>_<date>.json`) et le placera dans le répertoire courant.
 
 ```bash
 # Lancez le scan et générez le rapport JSON
-python3 security_checker.py votresite.com --formats json
+python3 security_analyzer.py votresite.com --formats json
 
 # Déplacez le rapport dans le répertoire des scans
 mv votresite.com_180825.json scans/
