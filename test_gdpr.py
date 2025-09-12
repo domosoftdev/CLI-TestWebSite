@@ -2,9 +2,10 @@ import unittest
 from unittest.mock import patch, MagicMock
 from cookie_analyzer import CookieAnalyzer
 
+
 class TestGDPR(unittest.TestCase):
 
-    @patch('cookie_analyzer.webdriver.Chrome')
+    @patch("cookie_analyzer.webdriver.Chrome")
     def test_check_consent_banner_found(self, mock_chrome):
         """
         Test that the consent banner is found when present.
@@ -25,10 +26,10 @@ class TestGDPR(unittest.TestCase):
         self.assertTrue(mock_driver_instance.find_elements.called)
 
         # Check the result
-        self.assertTrue(result['consent_banner']['present'])
-        self.assertIsNotNone(result['consent_banner']['selector'])
+        self.assertTrue(result["consent_banner"]["present"])
+        self.assertIsNotNone(result["consent_banner"]["selector"])
 
-    @patch('cookie_analyzer.webdriver.Chrome')
+    @patch("cookie_analyzer.webdriver.Chrome")
     def test_check_consent_banner_not_found(self, mock_chrome):
         """
         Test that the consent banner is not found when absent.
@@ -47,8 +48,9 @@ class TestGDPR(unittest.TestCase):
         self.assertTrue(mock_driver_instance.find_elements.called)
 
         # Check the result
-        self.assertFalse(result['consent_banner']['present'])
-        self.assertIsNone(result['consent_banner']['selector'])
+        self.assertFalse(result["consent_banner"]["present"])
+        self.assertIsNone(result["consent_banner"]["selector"])
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

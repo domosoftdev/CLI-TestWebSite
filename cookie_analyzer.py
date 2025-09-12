@@ -9,6 +9,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import WebDriverException
 
+
 class CookieAnalyzer:
     def __init__(self):
         self.driver = None
@@ -37,9 +38,7 @@ class CookieAnalyzer:
         if not self.driver:
             return {"error": "WebDriver could not be initialized."}
 
-        results = {
-            'consent_banner': self.check_consent_banner(url)
-        }
+        results = {"consent_banner": self.check_consent_banner(url)}
         self._teardown_driver()
         return results
 
@@ -51,9 +50,12 @@ class CookieAnalyzer:
             return {"present": False, "error": f"Failed to load page: {e}"}
 
         consent_selectors = [
-            '[class*="cookie"]', '[id*="cookie"]',
-            '[class*="consent"]', '[id*="consent"]',
-            '[class*="gdpr"]', '[id*="gdpr"]'
+            '[class*="cookie"]',
+            '[id*="cookie"]',
+            '[class*="consent"]',
+            '[id*="consent"]',
+            '[class*="gdpr"]',
+            '[id*="gdpr"]',
         ]
 
         for selector in consent_selectors:
@@ -61,6 +63,6 @@ class CookieAnalyzer:
                 if self.driver.find_elements(By.CSS_SELECTOR, selector):
                     return {"present": True, "selector": selector, "error": None}
             except WebDriverException:
-                continue # Ignore errors from invalid selectors if any
+                continue  # Ignore errors from invalid selectors if any
 
         return {"present": False, "selector": None, "error": None}
