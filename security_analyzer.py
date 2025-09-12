@@ -27,6 +27,7 @@ from bs4 import BeautifulSoup
 import re
 from packaging import version
 import whois
+from urllib.parse import urlparse
 from parking_scorer import calculerScoreParking
 from gdpr_analyzer import GDPRChecker
 
@@ -128,13 +129,14 @@ def check_host_exists(hostname):
 
 
 def get_hostname(url):
-    if url.startswith("https://"):
-        url = url[8:]
-    if url.startswith("http://"):
-        url = url[7:]
-    if "/" in url:
-        url = url.split("/")[0]
-    return url
+    # Add a default scheme if one isn't present, to help urlparse.
+    if "://" not in url:
+        # For bare domains, urlparse needs a scheme to correctly identify the netloc.
+        url = "http://" + url
+
+    parsed_url = urlparse(url)
+    # The hostname is stored in the 'netloc' attribute.
+    return parsed_url.netloc
 
 
 def check_ssl_certificate(hostname, verbose=False):
