@@ -141,7 +141,9 @@ def get_hostname(url):
 
 def check_ssl_certificate(hostname, verbose=False):
     if verbose:
-        print(f"  [>] Démarrage de la vérification du certificat SSL pour {hostname}...")
+        print(
+            f"  [>] Démarrage de la vérification du certificat SSL pour {hostname}..."
+        )
     context = ssl.create_default_context()
     try:
         with socket.create_connection((hostname, 443), timeout=5) as sock:
@@ -276,7 +278,9 @@ def scan_tls_protocols(hostname, verbose=False):
 
 def check_http_to_https_redirect(hostname, verbose=False):
     if verbose:
-        print(f"  [>] Vérification de la redirection HTTP vers HTTPS pour {hostname}...")
+        print(
+            f"  [>] Vérification de la redirection HTTP vers HTTPS pour {hostname}..."
+        )
     try:
         if verbose:
             print(f"      [i] Envoi de la requête GET à http://{hostname}")
@@ -307,7 +311,9 @@ def check_http_to_https_redirect(hostname, verbose=False):
 
 def check_dns_records(hostname, verbose=False):
     if verbose:
-        print(f"  [>] Démarrage de l'analyse des enregistrements DNS pour {hostname}...")
+        print(
+            f"  [>] Démarrage de l'analyse des enregistrements DNS pour {hostname}..."
+        )
     results = {}
     try:
         if verbose:
@@ -404,7 +410,9 @@ def check_cookie_security(hostname, verbose=False):
     results = []
     try:
         if verbose:
-            print(f"      [i] Envoi de la requête GET à https://{hostname} pour les cookies...")
+            print(
+                f"      [i] Envoi de la requête GET à https://{hostname} pour les cookies..."
+            )
         response = requests.get(f"https://{hostname}", timeout=10)
         raw_cookies = response.raw.headers.get_all("Set-Cookie", [])
         if verbose:
@@ -454,16 +462,22 @@ def check_cookie_security(hostname, verbose=False):
 
 def check_security_headers(hostname, verbose=False):
     if verbose:
-        print(f"  [>] Démarrage de l'analyse des en-têtes de sécurité pour {hostname}...")
+        print(
+            f"  [>] Démarrage de l'analyse des en-têtes de sécurité pour {hostname}..."
+        )
     results = {"empreinte": [], "en-tetes_securite": {}}
     try:
         if verbose:
-            print(f"      [i] Envoi de la requête GET à https://{hostname} pour les en-têtes...")
+            print(
+                f"      [i] Envoi de la requête GET à https://{hostname} pour les en-têtes..."
+            )
         response = requests.get(f"https://{hostname}", timeout=10)
         headers = {k.lower(): v for k, v in response.headers.items()}
         results["url_finale"] = response.url
         if verbose:
-            print(f"      [i] Analyse des en-têtes depuis l'URL finale : {response.url}")
+            print(
+                f"      [i] Analyse des en-têtes depuis l'URL finale : {response.url}"
+            )
         for h in ["server", "x-powered-by", "x-aspnet-version"]:
             if h in headers:
                 results["empreinte"].append(
@@ -537,7 +551,9 @@ def check_security_headers(hostname, verbose=False):
 
 def check_cms_footprint(hostname, verbose=False):
     if verbose:
-        print(f"  [>] Recherche de la balise 'generator' (empreinte CMS) pour {hostname}...")
+        print(
+            f"  [>] Recherche de la balise 'generator' (empreinte CMS) pour {hostname}..."
+        )
     try:
         response = requests.get(f"https://{hostname}", timeout=10)
         soup = BeautifulSoup(response.content, "lxml")
@@ -578,7 +594,9 @@ def check_cms_paths(hostname, verbose=False):
                 response = requests.head(url, timeout=3, allow_redirects=True)
                 if response.status_code in [200, 302, 301]:
                     if verbose:
-                        print(f"      [+] Chemin trouvé : {path} (Code: {response.status_code})")
+                        print(
+                            f"      [+] Chemin trouvé : {path} (Code: {response.status_code})"
+                        )
                     results.append({"cms": cms, "path": path, "criticite": "INFO"})
             except requests.exceptions.RequestException as e:
                 if verbose:
@@ -589,7 +607,9 @@ def check_cms_paths(hostname, verbose=False):
 
 def check_js_libraries(hostname, verbose=False):
     if verbose:
-        print(f"  [>] Démarrage de l'analyse des bibliothèques JavaScript pour {hostname}...")
+        print(
+            f"  [>] Démarrage de l'analyse des bibliothèques JavaScript pour {hostname}..."
+        )
     """
     Scans a given hostname for known JavaScript libraries using two methods:
     1. Regex matching on script filenames (for versioned files).
@@ -719,7 +739,9 @@ def check_js_libraries(hostname, verbose=False):
 
 def check_wordpress_specifics(hostname, verbose=False):
     if verbose:
-        print(f"  [>] Démarrage des vérifications spécifiques à WordPress pour {hostname}...")
+        print(
+            f"  [>] Démarrage des vérifications spécifiques à WordPress pour {hostname}..."
+        )
     results = {}
     base_url = f"https://{hostname}"
     try:
@@ -1440,7 +1462,9 @@ def main():
             f"https://{hostname}", verbose=args.verbose
         )
 
-    all_results["ssl_certificate"] = check_ssl_certificate(hostname, verbose=args.verbose)
+    all_results["ssl_certificate"] = check_ssl_certificate(
+        hostname, verbose=args.verbose
+    )
     all_results["tls_protocols"] = scan_tls_protocols(hostname, verbose=args.verbose)
     all_results["http_redirect"] = check_http_to_https_redirect(
         hostname, verbose=args.verbose
@@ -1448,7 +1472,9 @@ def main():
     all_results["security_headers"] = check_security_headers(
         hostname, verbose=args.verbose
     )
-    all_results["cookie_security"] = check_cookie_security(hostname, verbose=args.verbose)
+    all_results["cookie_security"] = check_cookie_security(
+        hostname, verbose=args.verbose
+    )
     all_results["cms_footprint_meta"] = check_cms_footprint(
         hostname, verbose=args.verbose
     )

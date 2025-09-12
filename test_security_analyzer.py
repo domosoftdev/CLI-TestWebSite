@@ -1,6 +1,7 @@
 import unittest
 from security_analyzer import get_hostname
 
+
 class TestSecurityAnalyzer(unittest.TestCase):
 
     def test_get_hostname(self):
@@ -12,7 +13,7 @@ class TestSecurityAnalyzer(unittest.TestCase):
             "http://google.com/path": "google.com",
             "www.example.co.uk/": "www.example.co.uk",
             "https://sub.domain.org": "sub.domain.org",
-            "ftp://ftp.example.com": "ftp.example.com", # Should work even with other protocols
+            "ftp://ftp.example.com": "ftp.example.com",  # Should work even with other protocols
             "bare-domain.com": "bare-domain.com",
         }
 
@@ -20,5 +21,6 @@ class TestSecurityAnalyzer(unittest.TestCase):
             with self.subTest(url=url):
                 self.assertEqual(get_hostname(url), expected_hostname)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
