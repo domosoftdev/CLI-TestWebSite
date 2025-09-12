@@ -1,7 +1,7 @@
 import unittest
 import socket
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, mock_open
 
 import dns.resolver
 import dns.resolver
@@ -18,6 +18,9 @@ from security_analyzer import (
     check_cookie_security,
     check_cms_footprint,
     check_whois_info,
+    print_human_readable_report,
+    generate_csv_report,
+    generate_html_report,
 )
 
 
@@ -232,3 +235,79 @@ class TestSecurityAnalyzerNetwork(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+from io import StringIO
+
+class TestSecurityAnalyzerOutput(unittest.TestCase):
+
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_print_human_readable_report(self, mock_stdout):
+        """
+        Tests that the human-readable report prints key information correctly.
+        """
+        # This sample data needs to be realistic for the calculate_score function
+        sample_results = {
+            "hostname": "example.com",
+            # The score is calculated, not taken directly from this dict
+            "ssl_certificate": {"statut": "ERROR", "message": "Le certificat a expiré.", "criticite": "CRITICAL"}, # Score = 10
+            "http_redirect": {"statut": "SUCCESS", "message": "Redirection correcte vers HTTPS.", "criticite": "INFO"}, # Score = 0
+        }
+        # Manually add the calculated score to the dictionary before printing
+        sample_results["score_final"], sample_results["note"] = calculate_score(sample_results)
+
+        print_human_readable_report(sample_results)
+
+        output = mock_stdout.getvalue()
+
+        self.assertIn("RAPPORT D'ANALYSE DE SÉCURITÉ POUR : example.com", output)
+        self.assertIn("SCORE DE DANGEROSITÉ : 10 (Note : A)", output) # Correct calculated score
+        self.assertIn("Le certificat a expiré.", output)
+        self.assertIn("Redirection correcte vers HTTPS.", output)
+
+    @patch("builtins.open", new_callable=mock_open)
+    def test_generate_csv_report(self, mock_file):
+        """
+        Tests that the CSV report is generated with the correct headers and data.
+        """
+        # This data structure needs to match what the function expects to iterate over
+        sample_results = {
+            "ssl_certificate": {"statut": "ERROR", "criticite": "CRITICAL", "message": "Expired", "date_expiration": "2022-01-01", "jours_restants": -100},
+            "tls_protocols": [{"statut": "WARNING", "protocole": "TLS 1.0", "criticite": "HIGH", "message": "Obsolete", "remediation_id": "TLS_OBSOLETE"}],
+        }
+
+        generate_csv_report(sample_results, "example.com")
+
+        mock_file.assert_called_once_with(unittest.mock.ANY, "w", newline="", encoding="utf-8")
+
+        handle = mock_file()
+        # The writer writes rows one by one, so we need to check the call args list
+        written_calls = handle.write.call_args_list
+        # Combine all written parts into one string for easier checking
+        full_written_content = "".join(call[0][0] for call in written_calls)
+
+        self.assertIn("Catégorie,Sous-catégorie,Statut,Criticité,Description", full_written_content)
+        self.assertIn("Certificat SSL,Détails du certificat,ERROR,CRITICAL", full_written_content)
+        self.assertIn("Tls Protocols,TLS 1.0,WARNING,HIGH,Obsolete", full_written_content)
+
+    @patch("builtins.open", new_callable=mock_open)
+    def test_generate_html_report(self, mock_file):
+        """
+        Tests that the HTML report is generated with the correct data.
+        """
+        sample_results = {
+            "hostname": "example.com",
+            "score_final": 42,
+            "note": "D",
+            "ssl_certificate": {"statut": "ERROR", "message": "Le certificat a expiré.", "criticite": "CRITICAL"},
+        }
+
+        generate_html_report(sample_results, "example.com")
+
+        mock_file.assert_called_once_with(unittest.mock.ANY, "w", encoding="utf-8")
+        handle = mock_file()
+        written_content = handle.write.call_args[0][0]
+
+        self.assertIn("<h1>Rapport d'Analyse de Sécurité pour example.com</h1>", written_content)
+        self.assertIn("Score de Dangerosité : 42 (Note: D)", written_content)
+        self.assertIn("Le certificat a expiré.", written_content)
