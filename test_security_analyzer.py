@@ -3,6 +3,9 @@ import socket
 from datetime import datetime, timedelta
 from unittest.mock import patch, MagicMock
 
+import dns.resolver
+import dns.resolver
+from sslyze import ScanCommand, ServerScanStatusEnum, ScanCommandAttemptStatusEnum
 from security_analyzer import (
     get_hostname,
     _format_whois_value,
@@ -10,6 +13,11 @@ from security_analyzer import (
     check_security_headers,
     check_ssl_certificate,
     check_http_to_https_redirect,
+    check_dns_records,
+    scan_tls_protocols,
+    check_cookie_security,
+    check_cms_footprint,
+    check_whois_info,
 )
 
 
@@ -102,6 +110,125 @@ class TestSecurityAnalyzerNetwork(unittest.TestCase):
         mock_get.return_value = mock_response
         result = check_http_to_https_redirect("example.com")
         self.assertEqual(result["statut"], "SUCCESS")
+
+    @patch("security_analyzer.dns.resolver.resolve")
+    def test_check_dns_records_all_missing(self, mock_resolve):
+        """
+        Tests the DNS check when all relevant records are missing (NXDOMAIN).
+        """
+        mock_resolve.side_effect = dns.resolver.NXDOMAIN
+        results = check_dns_records("missing-dns.com")
+        self.assertEqual(results["ns"]["statut"], "ERROR")
+        self.assertEqual(results["a"]["statut"], "ERROR")
+        self.assertEqual(results["mx"]["statut"], "ERROR")
+        self.assertEqual(results["dmarc"]["statut"], "ERROR")
+        self.assertEqual(results["spf"]["statut"], "ERROR")
+
+    @patch("security_analyzer.Scanner")
+    def test_scan_tls_protocols_obsolete_found(self, MockScanner):
+        """
+        Tests the TLS protocol scan when an obsolete protocol (e.g., TLS 1.0) is found.
+        """
+        # We need to build a mock result object that mimics the sslyze structure
+        mock_scan_result = MagicMock()
+
+        # Mocking a successful scan for an obsolete protocol
+        tls1_0_result = MagicMock()
+        tls1_0_result.status = ScanCommandAttemptStatusEnum.COMPLETED
+        tls1_0_result.result.accepted_cipher_suites = [MagicMock()] # Non-empty list means it's supported
+
+        # Mocking a successful scan for a modern protocol
+        tls1_3_result = MagicMock()
+        tls1_3_result.status = ScanCommandAttemptStatusEnum.COMPLETED
+        tls1_3_result.result.accepted_cipher_suites = [MagicMock()]
+
+        # Mocking a disabled protocol
+        ssl2_result = MagicMock()
+        ssl2_result.status = ScanCommandAttemptStatusEnum.COMPLETED
+        ssl2_result.result.accepted_cipher_suites = [] # Empty list means not supported
+
+        mock_scan_result.scan_result.tls_1_0_cipher_suites = tls1_0_result
+        mock_scan_result.scan_result.tls_1_3_cipher_suites = tls1_3_result
+        mock_scan_result.scan_result.ssl_2_0_cipher_suites = ssl2_result
+        # For simplicity, we assume other scans are similar or not run
+        mock_scan_result.scan_result.ssl_3_0_cipher_suites = ssl2_result
+        mock_scan_result.scan_result.tls_1_1_cipher_suites = ssl2_result
+        mock_scan_result.scan_result.tls_1_2_cipher_suites = tls1_3_result
+
+        mock_server_scan_result = MagicMock()
+        mock_server_scan_result.scan_status = ServerScanStatusEnum.COMPLETED
+        mock_server_scan_result.scan_result = mock_scan_result.scan_result
+
+        # The scanner's get_results() method should yield our mock result
+        mock_scanner_instance = MockScanner.return_value
+        mock_scanner_instance.get_results.return_value = [mock_server_scan_result]
+
+        results = scan_tls_protocols("example.com")
+
+        # Find the result for TLS 1.0 and assert it's an error
+        tls1_0_report = next((r for r in results if r["protocole"] == "TLS 1.0"), None)
+        self.assertIsNotNone(tls1_0_report)
+        self.assertEqual(tls1_0_report["statut"], "ERROR")
+        self.assertEqual(tls1_0_report["criticite"], "HIGH")
+
+        # Find the result for TLS 1.3 and assert it's a success
+        tls1_3_report = next((r for r in results if r["protocole"] == "TLS 1.3"), None)
+        self.assertIsNotNone(tls1_3_report)
+        self.assertEqual(tls1_3_report["statut"], "SUCCESS")
+
+    @patch("security_analyzer.requests.get")
+    def test_check_cookie_security_insecure(self, mock_get):
+        """
+        Tests the cookie check when a cookie is missing Secure and HttpOnly flags.
+        """
+        mock_response = MagicMock()
+        # The .raw attribute needs to be mocked for get_all()
+        mock_response.raw = MagicMock()
+        mock_response.raw.headers.get_all.return_value = ["sessionid=123; SameSite=Lax"]
+        mock_get.return_value = mock_response
+
+        results = check_cookie_security("example.com")
+        self.assertEqual(len(results), 1)
+        cookie = results[0]
+        self.assertEqual(cookie["secure"]["present"], False)
+        self.assertEqual(cookie["httponly"]["present"], False)
+        self.assertEqual(cookie["samesite"]["present"], True)
+        self.assertEqual(cookie["secure"]["criticite"], "HIGH")
+
+    @patch("security_analyzer.requests.get")
+    def test_check_cms_footprint_found(self, mock_get):
+        """
+        Tests the CMS footprint check when a generator tag is found.
+        """
+        mock_response = MagicMock()
+        mock_response.content = b'<html><head><meta name="generator" content="WordPress 6.0"></head></html>'
+        mock_get.return_value = mock_response
+
+        result = check_cms_footprint("example.com")
+        self.assertEqual(result["statut"], "INFO")
+        self.assertIn("WordPress 6.0", result["message"])
+
+    @patch("security_analyzer.whois.whois")
+    def test_check_whois_info_success(self, mock_whois):
+        """
+        Tests the WHOIS check with a successful response.
+        """
+        mock_whois_object = MagicMock()
+        mock_whois_object.domain_name = "EXAMPLE.COM"
+        # The whois library returns a dictionary-like object, so we mock .get()
+        mock_whois_object.get.side_effect = lambda key, default=None: {
+            "registrar": "Test Registrar",
+            "creation_date": datetime(2020, 1, 1),
+            "expiration_date": datetime(2030, 1, 1),
+        }.get(key, default)
+
+        mock_whois.return_value = mock_whois_object
+
+        result = check_whois_info("example.com")
+        self.assertEqual(result["statut"], "SUCCESS")
+        self.assertEqual(result["registrar"], "Test Registrar")
+        self.assertIn("2020-01-01", result["creation_date"])
+
 
 if __name__ == "__main__":
     unittest.main()
