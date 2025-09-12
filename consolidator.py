@@ -95,7 +95,9 @@ SUPPORTED_REPORTS = {
 }
 
 
-def load_scan_results():
+def load_scan_results(verbose=False):
+    if verbose:
+        print(f"[i] Chargement des rapports depuis le répertoire '{SCAN_REPORTS_DIR}'...")
     """
     Charge tous les rapports de scan JSON depuis le répertoire `scans/`.
 
@@ -187,6 +189,12 @@ def main():
         metavar="DOMAIN",
         help="Génère un graphique d'évolution du score pour un domaine.",
     )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Affiche des informations de débogage détaillées.",
+    )
 
     args = parser.parse_args()
 
@@ -196,38 +204,51 @@ def main():
         )
         return
 
-    all_scans = load_scan_results()
+    all_scans = load_scan_results(verbose=args.verbose)
 
     if not all_scans and not args.status:
-        print("Aucun rapport de scan trouvé dans le répertoire 'scans/'.")
+        if args.verbose:
+            print("[i] Aucun rapport de scan trouvé. Fin du script.")
+        else:
+            print("Aucun rapport de scan trouvé dans le répertoire 'scans/'.")
         return
 
     if args.list_scans:
-        display_scans_for_domain(all_scans, args.list_scans)
+        display_scans_for_domain(all_scans, args.list_scans, verbose=args.verbose)
     elif args.compare:
-        compare_scans(all_scans, args.compare[0], args.compare[1], args.compare[2])
+        compare_scans(
+            all_scans,
+            args.compare[0],
+            args.compare[1],
+            args.compare[2],
+            verbose=args.verbose,
+        )
     elif args.quick_wins:
-        display_quick_wins(all_scans, args.quick_wins)
+        display_quick_wins(all_scans, args.quick_wins, verbose=args.verbose)
     elif args.status:
-        display_scan_status(all_scans)
+        display_scan_status(all_scans, verbose=args.verbose)
     elif args.oldest:
-        display_oldest_scans(all_scans)
+        display_oldest_scans(all_scans, verbose=args.verbose)
     elif args.list_expiring_certs is not None:
-        display_expiring_certificates(all_scans, args.list_expiring_certs)
+        display_expiring_certificates(
+            all_scans, args.list_expiring_certs, verbose=args.verbose
+        )
     elif args.report:
-        generate_vulnerability_report(all_scans, args.report)
+        generate_vulnerability_report(all_scans, args.report, verbose=args.verbose)
     elif args.summary_html:
-        generate_html_summary(all_scans)
+        generate_html_summary(all_scans, verbose=args.verbose)
     elif args.graph:
-        generate_evolution_graph(all_scans, args.graph)
+        generate_evolution_graph(all_scans, args.graph, verbose=args.verbose)
     else:
         # Si aucune commande n'est spécifiée, afficher un résumé
         print(f"✅ {len(all_scans)} rapport(s) de scan chargé(s).")
         # parser.print_help()
 
 
-def display_scans_for_domain(all_scans, domain):
+def display_scans_for_domain(all_scans, domain, verbose=False):
     """Affiche tous les scans disponibles pour un domaine spécifique."""
+    if verbose:
+        print(f"[i] Filtrage des scans pour le domaine : {domain}")
     scans_for_domain = [s for s in all_scans if s["domain"] == domain]
     if not scans_for_domain:
         print(f"Aucun scan trouvé pour le domaine '{domain}'.")
@@ -241,9 +262,11 @@ def display_scans_for_domain(all_scans, domain):
         print(f"  - Date: {date_str}, Score: {score}, Note: {grade}")
 
 
-def display_scan_status(all_scans):
+def display_scan_status(all_scans, verbose=False):
     """Affiche l'état des scans par rapport à la liste des cibles."""
     try:
+        if verbose:
+            print("[i] Lecture du fichier 'targets.txt'...")
         with open("targets.txt", "r", encoding="utf-8") as f:
             targets = [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
@@ -256,33 +279,35 @@ def display_scan_status(all_scans):
     scanned_count = 0
     for target in targets:
         if target in scanned_domains:
+            if verbose:
+                print(f"  [i] Cible '{target}' trouvée dans les scans.")
             print(f"  [✅] {target}")
             scanned_count += 1
         else:
+            if verbose:
+                print(f"  [i] Cible '{target}' non trouvée.")
             print(f"  [❌] {target}")
 
     print(f"\nTotal: {scanned_count} / {len(targets)} cibles scannées.")
 
 
-def _extract_vulnerabilities(scan_data):
+def _extract_vulnerabilities(scan_data, verbose=False):
     """Helper pour extraire un set de vulnérabilités identifiables d'un rapport."""
     vulnerabilities = set()
+    if verbose:
+        print(f"    [debug] Extraction des vulnérabilités...")
 
     def find_issues(data, path=""):
         if isinstance(data, dict):
-            # Une vulnérabilité est un dictionnaire qui contient un remediation_id
             if "remediation_id" in data:
-                # On vérifie aussi qu'il ne s'agit pas d'un cas "réussi" qui aurait quand même un ID
-                # (certains objets comme les cookies en ont)
                 is_successful_case = (
                     data.get("present") is True or data.get("statut") == "SUCCESS"
                 )
                 if not is_successful_case:
                     vuln_id = f"{path}.{data['remediation_id']}"
+                    if verbose:
+                        print(f"      [debug] Vulnérabilité trouvée : {vuln_id}")
                     vulnerabilities.add(vuln_id)
-
-            # On continue la récursion même si on a trouvé une vulnérabilité
-            # pour les cas où des vulnérabilités sont nichées.
             for key, value in data.items():
                 find_issues(value, f"{path}.{key}" if path else key)
         elif isinstance(data, list):
@@ -290,11 +315,15 @@ def _extract_vulnerabilities(scan_data):
                 find_issues(item, f"{path}[{i}]")
 
     find_issues(scan_data)
+    if verbose:
+        print(f"    [debug] {len(vulnerabilities)} vulnérabilités uniques extraites.")
     return vulnerabilities
 
 
-def compare_scans(all_scans, domain, date1_str, date2_str):
+def compare_scans(all_scans, domain, date1_str, date2_str, verbose=False):
     """Compare deux scans pour un domaine donné."""
+    if verbose:
+        print(f"[i] Comparaison des scans pour {domain} entre {date1_str} et {date2_str}.")
     try:
         d1 = datetime.strptime(date1_str, "%Y-%m-%d").date()
         d2 = datetime.strptime(date2_str, "%Y-%m-%d").date()
@@ -302,9 +331,10 @@ def compare_scans(all_scans, domain, date1_str, date2_str):
         print("Erreur: Le format de la date doit être YYYY-MM-DD.")
         return
 
-    # S'assurer que d1 est avant d2
     if d1 > d2:
         d1, d2 = d2, d1
+        if verbose:
+            print(f"    [i] Dates inversées pour la comparaison : {d1} vs {d2}")
 
     scan1 = next(
         (s for s in all_scans if s["domain"] == domain and s["date"].date() == d1), None
@@ -317,17 +347,16 @@ def compare_scans(all_scans, domain, date1_str, date2_str):
         print(
             f"Impossible de trouver les deux scans pour '{domain}' aux dates {d1} et {d2}."
         )
-        if not scan1:
-            print(f"Aucun scan trouvé pour la date {d1}")
-        if not scan2:
-            print(f"Aucun scan trouvé pour la date {d2}")
-        # Proposer les dates disponibles
-        display_scans_for_domain(all_scans, domain)
+        if verbose:
+            if not scan1:
+                print(f"    [!] Scan pour la date {d1} introuvable.")
+            if not scan2:
+                print(f"    [!] Scan pour la date {d2} introuvable.")
+        display_scans_for_domain(all_scans, domain, verbose)
         return
 
     print(f"🔄 Comparaison des scans pour '{domain}' entre {d1} et {d2}\n")
 
-    # Comparaison des scores
     score1 = scan1["data"].get("score_final", 0)
     score2 = scan2["data"].get("score_final", 0)
     print(f"Score: {score1} (à {d1}) -> {score2} (à {d2})")
@@ -338,9 +367,8 @@ def compare_scans(all_scans, domain, date1_str, date2_str):
     else:
         print("  -> 😐 Score inchangé.")
 
-    # Comparaison des vulnérabilités
-    vulns1 = _extract_vulnerabilities(scan1["data"])
-    vulns2 = _extract_vulnerabilities(scan2["data"])
+    vulns1 = _extract_vulnerabilities(scan1["data"], verbose)
+    vulns2 = _extract_vulnerabilities(scan2["data"], verbose)
 
     fixed_vulns = vulns1 - vulns2
     new_vulns = vulns2 - vulns1
@@ -366,9 +394,11 @@ def compare_scans(all_scans, domain, date1_str, date2_str):
         print(f"\n[⚠️ {len(persistent_vulns)} VULNÉRABILITÉS PERSISTANTES]")
 
 
-def display_oldest_scans(all_scans):
+def display_oldest_scans(all_scans, verbose=False):
     """Affiche les cibles dont les scans sont les plus anciens."""
     try:
+        if verbose:
+            print("[i] Lecture de 'targets.txt' pour la liste des cibles...")
         with open("targets.txt", "r", encoding="utf-8") as f:
             targets = [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
@@ -387,7 +417,6 @@ def display_oldest_scans(all_scans):
         )
         last_scan_dates[target] = most_recent_scan["date"] if most_recent_scan else None
 
-    # Trie les cibles par date de dernier scan, les non-scannées en premier
     sorted_targets = sorted(
         last_scan_dates.items(),
         key=lambda item: item[1] if item[1] is not None else datetime.min,
@@ -414,7 +443,6 @@ QUICK_WIN_REMEDIATION_IDS = {
 
 
 def _get_quick_wins(scan_data):
-    """Retourne un set de vulnérabilités 'quick win' à partir des données d'un scan."""
     if not scan_data:
         return set()
     vulns = _extract_vulnerabilities(scan_data)
@@ -424,7 +452,6 @@ def _get_quick_wins(scan_data):
 
 
 def _count_critical_vulnerabilities(scan_data):
-    """Compte le nombre de vulnérabilités critiques ou élevées dans les données d'un scan."""
     if not scan_data:
         return 0
     count = 0
@@ -432,15 +459,12 @@ def _count_critical_vulnerabilities(scan_data):
     def find_critical_issues(data):
         nonlocal count
         if isinstance(data, dict):
-            # Une vulnérabilité critique est un dictionnaire qui a une criticité haute/critique
-            # et qui n'est pas un cas de succès.
             if data.get("criticite") in ["CRITICAL", "HIGH"]:
                 is_successful_case = (
                     data.get("present") is True or data.get("statut") == "SUCCESS"
                 )
                 if not is_successful_case:
                     count += 1
-
             for value in data.values():
                 find_critical_issues(value)
         elif isinstance(data, list):
@@ -451,9 +475,10 @@ def _count_critical_vulnerabilities(scan_data):
     return count
 
 
-def display_quick_wins(all_scans, domain_filter):
+def display_quick_wins(all_scans, domain_filter, verbose=False):
     """Identifie et affiche les vulnérabilités 'quick win'."""
-
+    if verbose:
+        print(f"[i] Recherche des 'quick wins' pour le filtre : {domain_filter}")
     target_domains = []
     if domain_filter == "all":
         target_domains = sorted(list({s["domain"] for s in all_scans}))
@@ -464,6 +489,8 @@ def display_quick_wins(all_scans, domain_filter):
 
     found_any = False
     for domain in target_domains:
+        if verbose:
+            print(f"  [>] Analyse du domaine : {domain}")
         most_recent_scan = next(
             (
                 s
@@ -493,16 +520,17 @@ def display_quick_wins(all_scans, domain_filter):
         print("Aucun 'quick win' identifié dans les derniers scans.")
 
 
-def display_expiring_certificates(all_scans, days_threshold):
+def display_expiring_certificates(all_scans, days_threshold, verbose=False):
     """Affiche les certificats SSL/TLS qui expirent bientôt."""
+    if verbose:
+        print(
+            f"[i] Recherche des certificats expirant dans les {days_threshold} prochains jours."
+        )
     today = datetime.now()
     expiring_certs = []
-
-    # Obtenir la liste des domaines uniques à partir des scans
     unique_domains = sorted(list({s["domain"] for s in all_scans}))
 
     for domain in unique_domains:
-        # Trouver le scan le plus récent pour ce domaine
         most_recent_scan = next(
             (
                 s
@@ -516,7 +544,6 @@ def display_expiring_certificates(all_scans, days_threshold):
 
         cert_info = most_recent_scan["data"].get("ssl_certificate", {})
         exp_date_str = cert_info.get("date_expiration")
-
         if not exp_date_str:
             continue
 
@@ -529,20 +556,18 @@ def display_expiring_certificates(all_scans, days_threshold):
                     {"domain": domain, "exp_date": exp_date, "days_left": days_left}
                 )
         except ValueError:
-            print(
-                f"Avertissement : Format de date invalide pour le certificat de '{domain}': '{exp_date_str}'"
-            )
+            if verbose:
+                print(
+                    f"    [!] Avertissement : Format de date invalide pour '{domain}': '{exp_date_str}'"
+                )
             continue
 
     print(f"📜 Certificats expirant dans les {days_threshold} prochains jours :\n")
-
     if not expiring_certs:
         print("Aucun certificat n'expire dans la période spécifiée. ✅")
         return
 
-    # Trie les certificats par date d'expiration (le plus proche en premier)
     expiring_certs.sort(key=lambda x: x["days_left"])
-
     for cert in expiring_certs:
         date_str = cert["exp_date"].strftime("%d %B %Y")
         days = cert["days_left"]
@@ -552,14 +577,11 @@ def display_expiring_certificates(all_scans, days_threshold):
         )
 
 
-def generate_vulnerability_report(all_scans, report_types):
+def generate_vulnerability_report(all_scans, report_types, verbose=False):
     """Génère un rapport listant les sites affectés par des vulnérabilités spécifiques."""
-
-    # Gérer le mot-clé 'all'
     if "all" in [rt.lower() for rt in report_types]:
         reports_to_run = list(SUPPORTED_REPORTS.keys())
     else:
-        # Valider les types de rapports demandés
         reports_to_run = []
         for rt in report_types:
             if rt.lower() in SUPPORTED_REPORTS:
@@ -573,15 +595,12 @@ def generate_vulnerability_report(all_scans, report_types):
             return
 
     print(f"🔎 Génération du rapport d'actions pour : {', '.join(reports_to_run)}\n")
-
-    # Obtenir la liste des domaines uniques à partir des scans
     unique_domains = sorted(list({s["domain"] for s in all_scans}))
-
-    # Structurer les résultats par type de vulnérabilité
     results = {report_type: [] for report_type in reports_to_run}
 
     for domain in unique_domains:
-        # Trouver le scan le plus récent pour ce domaine
+        if verbose:
+            print(f"  [>] Analyse du dernier scan pour {domain}...")
         most_recent_scan = next(
             (
                 s
@@ -593,18 +612,12 @@ def generate_vulnerability_report(all_scans, report_types):
         if not most_recent_scan:
             continue
 
-        # Extraire les vulnérabilités de ce scan
-        vulnerabilities = _extract_vulnerabilities(most_recent_scan["data"])
-
-        # Vérifier si le domaine est affecté par les vulnérabilités demandées
+        vulnerabilities = _extract_vulnerabilities(most_recent_scan["data"], verbose)
         for report_type in reports_to_run:
             remediation_id = SUPPORTED_REPORTS[report_type]
-            # Nous vérifions si un identifiant de vulnérabilité contient le remediation_id
-            # C'est plus flexible que une égalité stricte
             if any(remediation_id in v_id for v_id in vulnerabilities):
                 results[report_type].append(domain)
 
-    # Afficher le rapport
     found_any_issue = False
     for report_type, affected_domains in results.items():
         remediation_id = SUPPORTED_REPORTS[report_type]
@@ -631,9 +644,10 @@ def generate_vulnerability_report(all_scans, report_types):
         )
 
 
-def generate_html_summary(all_scans):
+def generate_html_summary(all_scans, verbose=False):
     """Génère un rapport de synthèse HTML pour tous les sites cibles."""
-
+    if verbose:
+        print("[i] Génération du rapport de synthèse HTML 'summary_report.html'...")
     try:
         with open("targets.txt", "r", encoding="utf-8") as f:
             targets = [line.strip() for line in f if line.strip()]
@@ -647,6 +661,8 @@ def generate_html_summary(all_scans):
     today = datetime.now()
 
     for target in targets:
+        if verbose:
+            print(f"  [>] Traitement de la cible : {target}")
         scans_for_domain = sorted(
             [s for s in all_scans if s["domain"] == target],
             key=lambda x: x["date"],
@@ -664,25 +680,22 @@ def generate_html_summary(all_scans):
                     exp_date_obj = datetime.strptime(exp_date_str, "%Y-%m-%d")
                     days_left = (exp_date_obj - today).days
                 except ValueError:
-                    pass  # La date est invalide, on la laisse à None
+                    pass
 
-            # Calcul de la tendance
             trend = "➡️"
             if len(scans_for_domain) > 1:
                 score_new = most_recent_scan["data"].get("score_final", 0)
                 score_old = scans_for_domain[1]["data"].get("score_final", 0)
                 if score_new < score_old:
-                    trend = "⬇️"  # Amélioration
+                    trend = "⬇️"
                 elif score_new > score_old:
-                    trend = "⬆️"  # Régression
+                    trend = "⬆️"
 
-            # Calculer les nouvelles métriques
             critical_vulns_count = _count_critical_vulnerabilities(
                 most_recent_scan["data"]
             )
             quick_wins_count = len(_get_quick_wins(most_recent_scan["data"]))
 
-            # Vérifier l'existence du rapport HTML détaillé
             detailed_report_name = (
                 f"{target}_{most_recent_scan['date'].strftime('%d%m%y')}.html"
             )
@@ -720,7 +733,6 @@ def generate_html_summary(all_scans):
                 }
             )
 
-    # Générer le HTML
     html = (
         """
     <!DOCTYPE html>
@@ -920,8 +932,10 @@ def generate_html_summary(all_scans):
         print(f"❌ Erreur lors de l'écriture du rapport HTML : {e}")
 
 
-def generate_evolution_graph(all_scans, domain):
+def generate_evolution_graph(all_scans, domain, verbose=False):
     """Génère un graphique d'évolution du score pour un domaine spécifique."""
+    if verbose:
+        print(f"[i] Génération du graphique d'évolution pour {domain}...")
     scans_for_domain = sorted(
         [s for s in all_scans if s["domain"] == domain], key=lambda x: x["date"]
     )

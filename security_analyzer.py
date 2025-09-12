@@ -137,11 +137,15 @@ def get_hostname(url):
     return url
 
 
-def check_ssl_certificate(hostname):
+def check_ssl_certificate(hostname, verbose=False):
+    if verbose:
+        print(f"  [>] Démarrage de la vérification du certificat SSL pour {hostname}...")
     context = ssl.create_default_context()
     try:
         with socket.create_connection((hostname, 443), timeout=5) as sock:
             with context.wrap_socket(sock, server_hostname=hostname) as ssock:
+                if verbose:
+                    print("      [+] Connexion SSL établie avec succès.")
                 cert = ssock.getpeercert()
                 subject = dict(x[0] for x in cert["subject"])
                 issuer = dict(x[0] for x in cert.get("issuer", []))
@@ -192,10 +196,14 @@ def check_ssl_certificate(hostname):
         }
 
 
-def scan_tls_protocols(hostname):
+def scan_tls_protocols(hostname, verbose=False):
+    if verbose:
+        print(f"  [>] Démarrage du scan des protocoles SSL/TLS pour {hostname}...")
     results = []
     try:
         server_location = ServerNetworkLocation(hostname=hostname, port=443)
+        if verbose:
+            print(f"      [i] Initialisation du scanner sslyze pour {hostname}:443.")
         scan_request = ServerScanRequest(
             server_location=server_location,
             scan_commands={
@@ -264,9 +272,15 @@ def scan_tls_protocols(hostname):
         ]
 
 
-def check_http_to_https_redirect(hostname):
+def check_http_to_https_redirect(hostname, verbose=False):
+    if verbose:
+        print(f"  [>] Vérification de la redirection HTTP vers HTTPS pour {hostname}...")
     try:
+        if verbose:
+            print(f"      [i] Envoi de la requête GET à http://{hostname}")
         response = requests.get(f"http://{hostname}", allow_redirects=False, timeout=10)
+        if verbose:
+            print(f"      [i] Reçu le code de statut : {response.status_code}")
         if 300 <= response.status_code < 400 and response.headers.get(
             "Location", ""
         ).startswith("https://"):
@@ -289,9 +303,13 @@ def check_http_to_https_redirect(hostname):
         }
 
 
-def check_dns_records(hostname):
+def check_dns_records(hostname, verbose=False):
+    if verbose:
+        print(f"  [>] Démarrage de l'analyse des enregistrements DNS pour {hostname}...")
     results = {}
     try:
+        if verbose:
+            print("      [i] Interrogation des enregistrements NS...")
         ns_ans = dns.resolver.resolve(hostname, "NS")
         results["ns"] = {
             "statut": "SUCCESS",
@@ -378,11 +396,17 @@ def check_dns_records(hostname):
     return results
 
 
-def check_cookie_security(hostname):
+def check_cookie_security(hostname, verbose=False):
+    if verbose:
+        print(f"  [>] Démarrage de l'analyse des cookies pour {hostname}...")
     results = []
     try:
+        if verbose:
+            print(f"      [i] Envoi de la requête GET à https://{hostname} pour les cookies...")
         response = requests.get(f"https://{hostname}", timeout=10)
         raw_cookies = response.raw.headers.get_all("Set-Cookie", [])
+        if verbose:
+            print(f"      [i] Trouvé {len(raw_cookies)} en-tête(s) Set-Cookie.")
         if not raw_cookies:
             return [
                 {
@@ -426,12 +450,18 @@ def check_cookie_security(hostname):
         ]
 
 
-def check_security_headers(hostname):
+def check_security_headers(hostname, verbose=False):
+    if verbose:
+        print(f"  [>] Démarrage de l'analyse des en-têtes de sécurité pour {hostname}...")
     results = {"empreinte": [], "en-tetes_securite": {}}
     try:
+        if verbose:
+            print(f"      [i] Envoi de la requête GET à https://{hostname} pour les en-têtes...")
         response = requests.get(f"https://{hostname}", timeout=10)
         headers = {k.lower(): v for k, v in response.headers.items()}
         results["url_finale"] = response.url
+        if verbose:
+            print(f"      [i] Analyse des en-têtes depuis l'URL finale : {response.url}")
         for h in ["server", "x-powered-by", "x-aspnet-version"]:
             if h in headers:
                 results["empreinte"].append(
@@ -503,7 +533,9 @@ def check_security_headers(hostname):
         }
 
 
-def check_cms_footprint(hostname):
+def check_cms_footprint(hostname, verbose=False):
+    if verbose:
+        print(f"  [>] Recherche de la balise 'generator' (empreinte CMS) pour {hostname}...")
     try:
         response = requests.get(f"https://{hostname}", timeout=10)
         soup = BeautifulSoup(response.content, "lxml")
@@ -527,7 +559,9 @@ def check_cms_footprint(hostname):
         }
 
 
-def check_cms_paths(hostname):
+def check_cms_paths(hostname, verbose=False):
+    if verbose:
+        print(f"  [>] Recherche de chemins d'accès CMS connus pour {hostname}...")
     results = []
     paths = {
         "WordPress": ["/wp-login.php", "/wp-admin/"],
@@ -536,16 +570,24 @@ def check_cms_paths(hostname):
     for cms, path_list in paths.items():
         for path in path_list:
             try:
-                if requests.head(
-                    f"https://{hostname}{path}", timeout=3, allow_redirects=True
-                ).status_code in [200, 302, 301]:
+                url = f"https://{hostname}{path}"
+                if verbose:
+                    print(f"      [i] Test de l'URL : {url}")
+                response = requests.head(url, timeout=3, allow_redirects=True)
+                if response.status_code in [200, 302, 301]:
+                    if verbose:
+                        print(f"      [+] Chemin trouvé : {path} (Code: {response.status_code})")
                     results.append({"cms": cms, "path": path, "criticite": "INFO"})
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as e:
+                if verbose:
+                    print(f"      [!] Erreur lors du test de {url}: {e}")
                 continue
     return results
 
 
-def check_js_libraries(hostname):
+def check_js_libraries(hostname, verbose=False):
+    if verbose:
+        print(f"  [>] Démarrage de l'analyse des bibliothèques JavaScript pour {hostname}...")
     """
     Scans a given hostname for known JavaScript libraries using two methods:
     1. Regex matching on script filenames (for versioned files).
@@ -673,7 +715,9 @@ def check_js_libraries(hostname):
     return results
 
 
-def check_wordpress_specifics(hostname):
+def check_wordpress_specifics(hostname, verbose=False):
+    if verbose:
+        print(f"  [>] Démarrage des vérifications spécifiques à WordPress pour {hostname}...")
     results = {}
     base_url = f"https://{hostname}"
     try:
@@ -769,10 +813,12 @@ def _format_whois_value(value):
     return str(value) if value is not None else "N/A"
 
 
-def check_whois_info(hostname):
+def check_whois_info(hostname, verbose=False):
     """
     Récupère les informations WHOIS pour un nom de domaine donné.
     """
+    if verbose:
+        print(f"  [>] Récupération des informations WHOIS pour {hostname}...")
     try:
         w = whois.whois(hostname)
 
@@ -1111,7 +1157,9 @@ def calculate_score(results):
     return total_score, grade
 
 
-def print_human_readable_report(results):
+def print_human_readable_report(results, verbose=False):
+    if verbose:
+        print("\n[i] Génération du rapport lisible par l'homme...")
     STATUS_ICONS = {"SUCCESS": "✅", "ERROR": "❌", "WARNING": "⚠️", "INFO": "ℹ️"}
     score, grade = calculate_score(results)
     print("\n" + "=" * 50)
@@ -1367,6 +1415,12 @@ def main():
         action="store_true",
         help="Inclut une analyse de conformité RGPD (expérimental, nécessite Selenium).",
     )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Affiche des informations de débogage détaillées pendant l'analyse.",
+    )
     args = parser.parse_args()
     hostname = get_hostname(args.url)
     if not check_host_exists(hostname):
@@ -1381,30 +1435,38 @@ def main():
         print("Analyse RGPD activée...")
         gdpr_checker = GDPRChecker()
         all_results["gdpr_compliance"] = gdpr_checker.check_gdpr_compliance(
-            f"https://{hostname}"
+            f"https://{hostname}", verbose=args.verbose
         )
 
-    all_results["ssl_certificate"] = check_ssl_certificate(hostname)
-    all_results["tls_protocols"] = scan_tls_protocols(hostname)
-    all_results["http_redirect"] = check_http_to_https_redirect(hostname)
-    all_results["security_headers"] = check_security_headers(hostname)
-    all_results["cookie_security"] = check_cookie_security(hostname)
-    all_results["cms_footprint_meta"] = check_cms_footprint(hostname)
-    all_results["cms_footprint_paths"] = check_cms_paths(hostname)
+    all_results["ssl_certificate"] = check_ssl_certificate(hostname, verbose=args.verbose)
+    all_results["tls_protocols"] = scan_tls_protocols(hostname, verbose=args.verbose)
+    all_results["http_redirect"] = check_http_to_https_redirect(
+        hostname, verbose=args.verbose
+    )
+    all_results["security_headers"] = check_security_headers(
+        hostname, verbose=args.verbose
+    )
+    all_results["cookie_security"] = check_cookie_security(hostname, verbose=args.verbose)
+    all_results["cms_footprint_meta"] = check_cms_footprint(
+        hostname, verbose=args.verbose
+    )
+    all_results["cms_footprint_paths"] = check_cms_paths(hostname, verbose=args.verbose)
     is_wordpress = any(
         path.get("cms") == "WordPress"
         for path in all_results.get("cms_footprint_paths", [])
     )
     if is_wordpress:
-        all_results["wordpress_specifics"] = check_wordpress_specifics(hostname)
-    all_results["dns_records"] = check_dns_records(hostname)
-    all_results["js_libraries"] = check_js_libraries(hostname)
-    all_results["whois_info"] = check_whois_info(hostname)
-    all_results["parking_score"] = calculerScoreParking(hostname)
+        all_results["wordpress_specifics"] = check_wordpress_specifics(
+            hostname, verbose=args.verbose
+        )
+    all_results["dns_records"] = check_dns_records(hostname, verbose=args.verbose)
+    all_results["js_libraries"] = check_js_libraries(hostname, verbose=args.verbose)
+    all_results["whois_info"] = check_whois_info(hostname, verbose=args.verbose)
+    all_results["parking_score"] = calculerScoreParking(hostname, verbose=args.verbose)
     score, grade = calculate_score(all_results)
     all_results["score_final"] = score
     all_results["note"] = grade
-    print_human_readable_report(all_results)
+    print_human_readable_report(all_results, verbose=args.verbose)
     formats = [f.strip() for f in args.formats.lower().split(",") if f.strip()]
     if "json" in formats:
         generate_json_report(all_results, hostname)

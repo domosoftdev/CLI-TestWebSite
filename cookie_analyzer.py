@@ -32,21 +32,29 @@ class CookieAnalyzer:
         if self.driver:
             self.driver.quit()
 
-    def analyze(self, url):
+    def analyze(self, url, verbose=False):
         """Lance l'analyse des cookies pour une URL donnée."""
+        if verbose:
+            print("      [>>] Démarrage de CookieAnalyzer...")
         self._setup_driver()
         if not self.driver:
             return {"error": "WebDriver could not be initialized."}
 
-        results = {"consent_banner": self.check_consent_banner(url)}
+        results = {"consent_banner": self.check_consent_banner(url, verbose=verbose)}
         self._teardown_driver()
         return results
 
-    def check_consent_banner(self, url: str) -> dict:
+    def check_consent_banner(self, url: str, verbose=False) -> dict:
         """Détecte la présence d'une bannière de consentement."""
+        if verbose:
+            print("          [>>>] Recherche d'une bannière de consentement...")
         try:
             self.driver.get(url)
+            if verbose:
+                print(f"              [i] Page {url} chargée avec succès.")
         except WebDriverException as e:
+            if verbose:
+                print(f"              [!] Erreur lors du chargement de la page : {e}")
             return {"present": False, "error": f"Failed to load page: {e}"}
 
         consent_selectors = [
@@ -60,9 +68,18 @@ class CookieAnalyzer:
 
         for selector in consent_selectors:
             try:
-                if self.driver.find_elements(By.CSS_SELECTOR, selector):
+                if verbose:
+                    print(f"              [i] Test du sélecteur CSS : {selector}")
+                elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                if elements:
+                    if verbose:
+                        print(f"              [+] Bannière trouvée avec le sélecteur : {selector}")
                     return {"present": True, "selector": selector, "error": None}
             except WebDriverException:
+                if verbose:
+                    print(f"              [!] Sélecteur invalide ou erreur : {selector}")
                 continue  # Ignore errors from invalid selectors if any
 
+        if verbose:
+            print("          [+] Aucune bannière de consentement détectée.")
         return {"present": False, "selector": None, "error": None}
