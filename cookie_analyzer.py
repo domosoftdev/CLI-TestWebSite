@@ -73,11 +73,15 @@ class CookieAnalyzer:
                 elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
                 if elements:
                     if verbose:
-                        print(f"              [+] Bannière trouvée avec le sélecteur : {selector}")
+                        print(
+                            f"              [+] Bannière trouvée avec le sélecteur : {selector}"
+                        )
                     return {"present": True, "selector": selector, "error": None}
             except WebDriverException:
                 if verbose:
-                    print(f"              [!] Sélecteur invalide ou erreur : {selector}")
+                    print(
+                        f"              [!] Sélecteur invalide ou erreur : {selector}"
+                    )
                 continue  # Ignore errors from invalid selectors if any
 
         if verbose:

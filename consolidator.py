@@ -97,7 +97,9 @@ SUPPORTED_REPORTS = {
 
 def load_scan_results(verbose=False):
     if verbose:
-        print(f"[i] Chargement des rapports depuis le répertoire '{SCAN_REPORTS_DIR}'...")
+        print(
+            f"[i] Chargement des rapports depuis le répertoire '{SCAN_REPORTS_DIR}'..."
+        )
     """
     Charge tous les rapports de scan JSON depuis le répertoire `scans/`.
 
@@ -323,7 +325,9 @@ def _extract_vulnerabilities(scan_data, verbose=False):
 def compare_scans(all_scans, domain, date1_str, date2_str, verbose=False):
     """Compare deux scans pour un domaine donné."""
     if verbose:
-        print(f"[i] Comparaison des scans pour {domain} entre {date1_str} et {date2_str}.")
+        print(
+            f"[i] Comparaison des scans pour {domain} entre {date1_str} et {date2_str}."
+        )
     try:
         d1 = datetime.strptime(date1_str, "%Y-%m-%d").date()
         d2 = datetime.strptime(date2_str, "%Y-%m-%d").date()
