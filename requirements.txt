@@ -8,3 +8,4 @@ python-whois
 matplotlib
 selenium
 pytest
+pytest-cov
