@@ -60,22 +60,24 @@ class SecurityAnalyzer:
             all_results['gdpr_compliance'] = gdpr_checker.check_gdpr_compliance(f"https://{hostname}")
 
         # Exécution des différents modules de scan
-        all_results['ssl_certificate'] = self._check_ssl_certificate(hostname)
+        ssl_cert_result = self._check_ssl_certificate(hostname)
+        all_results['ssl_certificate'] = ssl_cert_result
+
         all_results['tls_protocols'] = self._scan_tls_protocols(hostname)
         all_results['http_redirect'] = self._check_http_to_https_redirect(hostname)
-        all_results['security_headers'] = self._check_security_headers(hostname)
-        all_results['cookie_security'] = self._check_cookie_security(hostname)
-        all_results['cms_footprint_meta'] = self._check_cms_footprint(hostname)
-        all_results['cms_footprint_paths'] = self._check_cms_paths(hostname)
+        all_results['security_headers'] = self._check_security_headers(hostname, ssl_cert_result=ssl_cert_result)
+        all_results['cookie_security'] = self._check_cookie_security(hostname, ssl_cert_result=ssl_cert_result)
+        all_results['cms_footprint_meta'] = self._check_cms_footprint(hostname, ssl_cert_result=ssl_cert_result)
+        all_results['cms_footprint_paths'] = self._check_cms_paths(hostname, ssl_cert_result=ssl_cert_result)
 
         is_wordpress = any(path.get('cms') == 'WordPress' for path in all_results.get('cms_footprint_paths', []))
         if is_wordpress:
             if self.verbose:
                 print("WordPress détecté, lancement des scans spécifiques...")
-            all_results['wordpress_specifics'] = self._check_wordpress_specifics(hostname)
+            all_results['wordpress_specifics'] = self._check_wordpress_specifics(hostname, ssl_cert_result=ssl_cert_result)
 
         all_results['dns_records'] = self._check_dns_records(hostname)
-        all_results['js_libraries'] = self._check_js_libraries(hostname)
+        all_results['js_libraries'] = self._check_js_libraries(hostname, ssl_cert_result=ssl_cert_result)
         all_results['whois_info'] = self._check_whois_info(hostname)
         all_results['parking_score'] = calculate_parking_score(hostname, verbose=self.verbose)
 
@@ -262,7 +264,7 @@ class SecurityAnalyzer:
         except Exception: results['spf'] = {"statut": "ERROR", "message": "Aucun enregistrement TXT trouvé.", "criticite": "HIGH"}
         return results
 
-    def _check_cookie_security(self, hostname):
+    def _check_cookie_security(self, hostname, ssl_cert_result=None):
         if self.verbose: print(f"  - Analyse des cookies pour {hostname}")
         results = []
         try:
@@ -278,10 +280,14 @@ class SecurityAnalyzer:
                 cookie_res["samesite"] = {"present": samesite_ok, "criticite": "INFO" if samesite_ok else "MEDIUM", "remediation_id": "COOKIE_NO_SAMESITE"}
                 results.append(cookie_res)
             return results
+        except requests.exceptions.SSLError:
+            if ssl_cert_result and ssl_cert_result.get('points_a_corriger'):
+                return [{"statut": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié.", "criticite": "INFO"}]
+            return [{"statut": "ERROR", "message": "Erreur SSL lors de la connexion.", "criticite": "HIGH"}]
         except Exception as e:
             return [{"statut": "ERROR", "message": f"Erreur lors de la récupération des cookies: {e}", "criticite": "HIGH"}]
 
-    def _check_security_headers(self, hostname):
+    def _check_security_headers(self, hostname, ssl_cert_result=None):
         if self.verbose: print(f"  - Analyse des en-têtes de sécurité pour {hostname}")
         results = {"empreinte": [], "en-tetes_securite": {}}
         try:
@@ -301,29 +307,40 @@ class SecurityAnalyzer:
             if csp_header: results['en-tetes_securite']['csp'] = {"statut": "SUCCESS", "criticite": "INFO"}
             else: results['en-tetes_securite']['csp'] = {"statut": "WARNING", "criticite": "LOW", "remediation_id": "CSP_MISSING"}
             return results
+        except requests.exceptions.SSLError:
+            if ssl_cert_result and ssl_cert_result.get('points_a_corriger'):
+                return {"statut": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié.", "criticite": "INFO"}
+            return {"statut": "ERROR", "message": "Erreur SSL lors de la connexion.", "criticite": "HIGH"}
         except Exception as e:
             return {"statut": "ERROR", "message": f"Erreur lors de la récupération des en-têtes: {e}", "criticite": "HIGH"}
 
-    def _check_cms_footprint(self, hostname):
+    def _check_cms_footprint(self, hostname, ssl_cert_result=None):
         if self.verbose: print(f"  - Recherche d'empreinte CMS pour {hostname}")
         try:
             response = requests.get(f"https://{hostname}", timeout=DEFAULT_TIMEOUT); soup = BeautifulSoup(response.content, 'lxml'); gen_tag = soup.find('meta', attrs={'name': 'generator'})
             if gen_tag and gen_tag.get('content'): return {"statut": "INFO", "message": f"Balise 'generator' trouvée: {gen_tag.get('content')}", "criticite": "INFO"}
             return {"statut": "INFO", "message": "Aucune balise meta 'generator' trouvée.", "criticite": "INFO"}
+        except requests.exceptions.SSLError:
+            if ssl_cert_result and ssl_cert_result.get('points_a_corriger'):
+                return {"statut": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié.", "criticite": "INFO"}
+            return {"statut": "ERROR", "message": "Erreur SSL lors de la connexion.", "criticite": "HIGH"}
         except Exception as e:
             return {"statut": "ERROR", "message": f"Erreur lors de l'analyse CMS: {e}", "criticite": "HIGH"}
 
-    def _check_cms_paths(self, hostname):
+    def _check_cms_paths(self, hostname, ssl_cert_result=None):
         if self.verbose: print(f"  - Vérification des chemins CMS connus pour {hostname}")
         results = []
         for cms, path_list in CMS_PATHS.items():
             for path in path_list:
                 try:
                     if requests.head(f"https://{hostname}{path}", timeout=3, allow_redirects=True).status_code in [200, 302, 301]: results.append({"cms": cms, "path": path, "criticite": "INFO"})
+                except requests.exceptions.SSLError:
+                    # Don't report for every single path, just break
+                    break
                 except requests.exceptions.RequestException: continue
         return results
 
-    def _check_js_libraries(self, hostname):
+    def _check_js_libraries(self, hostname, ssl_cert_result=None):
         if self.verbose: print(f"  - Analyse des bibliothèques JavaScript pour {hostname}")
         results = []
         detected_libs = {}
@@ -369,23 +386,31 @@ class SecurityAnalyzer:
                     except version.InvalidVersion:
                         continue
                 results.append(result_entry)
+        except requests.exceptions.SSLError:
+            if ssl_cert_result and ssl_cert_result.get('points_a_corriger'):
+                return [{"statut": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié.", "criticite": "INFO"}]
+            return [{"statut": "ERROR", "message": "Erreur SSL lors de la connexion.", "criticite": "HIGH"}]
         except Exception as e:
             return [{"statut": "ERROR", "message": f"Erreur lors de l'analyse des bibliothèques JS: {e}", "criticite": "HIGH"}]
         return results
 
-    def _check_wordpress_specifics(self, hostname):
+    def _check_wordpress_specifics(self, hostname, ssl_cert_result=None):
         if self.verbose: print(f"  - Vérification des points spécifiques à WordPress pour {hostname}")
         results = {}; base_url = f"https://{hostname}"
         try:
             url = f"{base_url}/wp-config.php.bak"; response = requests.head(url, timeout=5, allow_redirects=False)
             if response.status_code == 200: results['config_backup'] = {"statut": "ERROR", "criticite": "CRITICAL", "message": f"Le fichier de sauvegarde {url} est exposé publiquement.", "remediation_id": "WP_CONFIG_BAK_EXPOSED"}
             else: results['config_backup'] = {"statut": "SUCCESS", "criticite": "INFO", "message": "Le fichier wp-config.php.bak n'a pas été trouvé."}
+        except requests.exceptions.SSLError:
+             results['config_backup'] = {"statut": "INFO", "criticite": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié."}
         except requests.exceptions.RequestException: results['config_backup'] = {"statut": "INFO", "criticite": "INFO", "message": "Erreur réseau lors de la vérification de wp-config.php.bak."}
         try:
             url = f"{base_url}/?author=1"; response = requests.get(url, timeout=5, allow_redirects=False); location = response.headers.get('Location', '')
             if 300 <= response.status_code < 400 and '/author/' in location:
                 username = location.split('/author/')[1].split('/')[0]; results['user_enum'] = {"statut": "ERROR", "criticite": "MEDIUM", "message": f"L'énumération d'utilisateurs est possible. Nom d'utilisateur trouvé : '{username}'.", "remediation_id": "WP_USER_ENUM_ENABLED"}
             else: results['user_enum'] = {"statut": "SUCCESS", "criticite": "INFO", "message": "L'énumération d'utilisateurs via ?author=1 ne semble pas possible."}
+        except requests.exceptions.SSLError:
+             results['user_enum'] = {"statut": "INFO", "criticite": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié."}
         except requests.exceptions.RequestException: results['user_enum'] = {"statut": "INFO", "criticite": "INFO", "message": "Erreur réseau lors de la vérification de l'énumération d'utilisateurs."}
         try:
             response = requests.get(base_url, timeout=DEFAULT_TIMEOUT); soup = BeautifulSoup(response.content, 'lxml'); plugin_pattern = re.compile(r'/wp-content/plugins/([a-zA-Z0-9_-]+)/'); found_plugins = set()
@@ -396,6 +421,8 @@ class SecurityAnalyzer:
                     if match: found_plugins.add(match.group(1))
             if found_plugins: results['plugin_enum'] = {"statut": "INFO", "criticite": "INFO", "message": "Plugins détectés", "plugins": list(found_plugins)}
             else: results['plugin_enum'] = {"statut": "INFO", "criticite": "INFO", "message": "Aucun plugin détecté depuis la page d'accueil."}
+        except requests.exceptions.SSLError:
+            results['plugin_enum'] = {"statut": "INFO", "criticite": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié."}
         except requests.exceptions.RequestException: results['plugin_enum'] = {"statut": "INFO", "criticite": "INFO", "message": "Erreur réseau lors de l'énumération des plugins."}
         return results
 
