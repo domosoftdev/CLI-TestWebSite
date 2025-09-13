@@ -139,12 +139,18 @@ class SecurityAnalyzer:
                     return {"statut": "ERROR", "message": error_msg, "criticite": "HIGH"}
 
                 # We have a result, let's process it
-                cert_info_result = result.scan_result.certificate_info
-                if cert_info_result.status == ScanCommandAttemptStatusEnum.ERROR:
-                    return {"statut": "ERROR", "message": f"La commande de scan de certificat a échoué: {cert_info_result.error_reason}", "criticite": "HIGH"}
+                cert_info_attempt = result.scan_result.certificate_info
+                if cert_info_attempt.status == ScanCommandAttemptStatusEnum.ERROR:
+                    return {"statut": "ERROR", "message": f"La commande de scan de certificat a échoué: {cert_info_attempt.error_reason}", "criticite": "HIGH"}
 
-                validation_result = cert_info_result.result.path_validation_results[0]
-                leaf_cert = cert_info_result.result.certificate_chain[0]
+                cert_info_result = cert_info_attempt.result
+                if not cert_info_result.certificate_deployments:
+                    return {"statut": "ERROR", "message": "Aucun certificat n'a été reçu du serveur.", "criticite": "HIGH"}
+
+                deployment = cert_info_result.certificate_deployments[0]
+                validation_result = deployment.path_validation_results[0]
+                cert_chain = deployment.received_certificate_chain
+                leaf_cert = cert_chain[0]
 
                 # Basic certificate details
                 subject = leaf_cert.subject.rfc4514_string()
@@ -156,10 +162,11 @@ class SecurityAnalyzer:
                     "sujet": subject,
                     "emetteur": issuer,
                     "date_expiration": exp_date.strftime('%Y-%m-%d'),
-                    "jours_restants": jours_restants
+                    "jours_restants": jours_restants,
+                    "certificate_chain": [cert.subject.rfc4514_string() for cert in cert_chain]
                 }
 
-                if not validation_result.is_trusted:
+                if not validation_result.was_validation_successful:
                     error_message = f"La chaîne de certificats n'est pas fiable. Erreur : {validation_result.validation_error}"
                     # Check for a common specific error: incomplete chain
                     if "unable to get local issuer certificate" in str(validation_result.validation_error):
