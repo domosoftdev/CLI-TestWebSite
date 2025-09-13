@@ -63,28 +63,25 @@ def generate_csv_report(results, hostname, output_dir="."):
     os.makedirs(output_dir, exist_ok=True)
     date_str = datetime.now().strftime('%d%m%y')
     filename = os.path.join(output_dir, f"{hostname}_{date_str}.csv")
-    header = ['Catégorie', 'Sous-catégorie', 'Statut', 'Criticité', 'Description', 'Chaine de Certificat', 'Vulnérabilités']
+    header = ['Catégorie', 'Sous-catégorie', 'Statut', 'Criticité', 'Description', 'Vulnérabilités']
     rows = []
 
-    # Special handling for SSL certificate
-    ssl_res = results.get('ssl_certificate')
-    if ssl_res:
-        chain_str = ""
-        if ssl_res.get('certificate_chain'):
-            chain_str = " -> ".join(ssl_res['certificate_chain'])
-
-        rows.append({
-            'Catégorie': 'Ssl Certificate',
-            'Sous-catégorie': ssl_res.get('sujet', 'N/A'),
-            'Statut': ssl_res.get('statut'),
-            'Criticité': ssl_res.get('criticite'),
-            'Description': ssl_res.get('message'),
-            'Chaine de Certificat': chain_str,
-            'Vulnérabilités': "" # Not applicable for the main cert check
-        })
-
-    # Helper to flatten other nested result dictionaries
+    # Helper to flatten the nested result dictionaries
     def flatten_data(category, sub_category, data):
+        # Special handling for the new SSL structure
+        if category.lower() == 'ssl certificate':
+            if data.get('points_a_corriger'):
+                for point in data['points_a_corriger']:
+                    rows.append({
+                        'Catégorie': category,
+                        'Sous-catégorie': 'Certificat SSL/TLS',
+                        'Statut': 'WARNING' if point.get('criticite') == 'MEDIUM' else 'ERROR',
+                        'Criticité': point.get('criticite'),
+                        'Description': point.get('message'),
+                        'Vulnérabilités': ''
+                    })
+            return # Stop processing this category further
+
         if isinstance(data, list):
             for item in data:
                 flatten_data(category, sub_category, item)
@@ -97,13 +94,11 @@ def generate_csv_report(results, hostname, output_dir="."):
                     'Statut': data.get('statut'),
                     'Criticité': data.get('criticite'),
                     'Description': data.get('message') or f"Version: {data.get('version_detectee')} (Dernière: {data.get('derniere_version')})",
-                    'Chaine de Certificat': '', # Not applicable for other checks
                     'Vulnérabilités': vuln_ids
                 })
 
     for key, res in results.items():
-        # Skip keys already handled or not for reporting
-        if key in ['hostname', 'score_final', 'note', 'ssl_certificate']:
+        if key in ['hostname', 'score_final', 'note']:
             continue
         flatten_data(key.replace('_', ' ').title(), key, res)
 
@@ -124,7 +119,6 @@ def generate_html_report(results, hostname, output_dir="."):
     score = results.get('score_final', 0)
     grade = results.get('note', 'N/A')
 
-    # Basic HTML structure, can be enhanced with CSS from the original file
     html_content = f"<!DOCTYPE html><html><head><title>Rapport de Sécurité - {hostname}</title></head><body>"
     html_content += f"<h1>Rapport d'Analyse de Sécurité pour {hostname}</h1>"
     html_content += f"<h2>Score de Dangerosité : {score} (Note: {grade})</h2>"
@@ -134,20 +128,40 @@ def generate_html_report(results, hostname, output_dir="."):
             continue
         html_content += f"<div><h2>{category.replace('_', ' ').title()}</h2>"
 
-        # Special handling for SSL Certificate to show details
         if category == 'ssl_certificate' and isinstance(data, dict):
             status_class = data.get('statut', 'INFO').lower()
-            html_content += f"<p class='{status_class}'><strong>Status:</strong> {data.get('statut', 'N/A')}</p>"
-            html_content += f"<p><strong>Message:</strong> {data.get('message', 'N/A')}</p>"
-            if 'jours_restants' in data:
-                html_content += f"<p><strong>Jours Restants:</strong> {data['jours_restants']}</p>"
-            if 'certificate_chain' in data:
-                html_content += "<strong>Chaîne de confiance:</strong><ul>"
-                for cert_subject in data['certificate_chain']:
-                    html_content += f"<li>{cert_subject}</li>"
+            html_content += f"<p class='{status_class}'><strong>Statut global :</strong> {data.get('statut', 'N/A')} ({data.get('message', 'N/A')})</p>"
+
+            if data.get('points_a_corriger'):
+                html_content += "<strong>Points à corriger :</strong><ul>"
+                for point in data['points_a_corriger']:
+                    html_content += f"<li><strong>[{point.get('criticite')}]</strong>: {point.get('message')}</li>"
+                html_content += "</ul>"
+
+            if data.get('details'):
+                details = data['details']
+                html_content += "<strong>Détails techniques :</strong><ul>"
+                detail_items = {
+                    "Expire dans": f"{details.get('jours_restants')} jours",
+                    "Force de la clé": details.get('force_cle_publique'),
+                    "Algorithme de signature": details.get('algorithme_signature'),
+                }
+                for label, value in detail_items.items():
+                    if value: html_content += f"<li><strong>{label}:</strong> {value}</li>"
+
+                if 'noms_alternatifs_sujet (SAN)' in details:
+                    html_content += "<li><strong>Noms alternatifs (SAN):</strong><ul>"
+                    for name in details['noms_alternatifs_sujet (SAN)']:
+                        html_content += f"<li>{name}</li>"
+                    html_content += "</ul></li>"
+
+                if 'chaine_de_certificats' in details:
+                    html_content += "<li><strong>Chaîne de confiance:</strong><ul>"
+                    for cert_subject in details['chaine_de_certificats']:
+                        html_content += f"<li>{cert_subject}</li>"
+                    html_content += "</ul></li>"
                 html_content += "</ul>"
         else:
-            # Fallback to JSON for other categories
             html_content += f"<pre>{json.dumps(data, indent=2, ensure_ascii=False)}</pre>"
 
         html_content += "</div>"
@@ -182,14 +196,38 @@ def print_human_readable_report(results):
 
         # Special handling for SSL Certificate to show details
         if category == 'ssl_certificate' and isinstance(data, dict):
+            # Main status
             icon = STATUS_ICONS.get(data.get('statut'), '❓')
-            print(f"  {icon} [{data.get('criticite', 'INFO')}] {data.get('message', 'Détail non disponible.')}")
-            if 'jours_restants' in data:
-                print(f"    - Expire dans : {data['jours_restants']} jours")
-            if 'certificate_chain' in data:
-                print("    - Chaîne de confiance :")
-                for i, cert_subject in enumerate(data['certificate_chain']):
-                    print(f"      {i}: {cert_subject}")
+            print(f"  {icon} [{data.get('criticite', 'INFO')}] {data.get('message')}")
+
+            # Points to correct
+            if data.get('points_a_corriger'):
+                print("    - Points à corriger :")
+                for point in data['points_a_corriger']:
+                    icon = STATUS_ICONS.get(point.get('statut', '❓'), '❓')
+                    print(f"      {icon} [{point.get('criticite')}] {point.get('message')}")
+
+            # Details section
+            if data.get('details'):
+                print("    - Détails techniques :")
+                details = data['details']
+                detail_items = {
+                    "Expire dans": f"{details.get('jours_restants')} jours",
+                    "Force de la clé": details.get('force_cle_publique'),
+                    "Algorithme de signature": details.get('algorithme_signature'),
+                }
+                for label, value in detail_items.items():
+                    if value: print(f"      - {label} : {value}")
+
+                if 'noms_alternatifs_sujet (SAN)' in details:
+                    print("      - Noms alternatifs (SAN) :")
+                    for name in details['noms_alternatifs_sujet (SAN)']:
+                        print(f"        - {name}")
+
+                if 'chaine_de_certificats' in details:
+                    print("      - Chaîne de confiance :")
+                    for i, cert_subject in enumerate(details['chaine_de_certificats']):
+                        print(f"        {i}: {cert_subject}")
 
         elif isinstance(data, list):
             for item in data:
