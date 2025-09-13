@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Debug structure
+        run: ls -R
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -21,7 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: npm install
-        working-directory: ./CLITestwebsite
+        working-directory: .
 
       - name: Run tests and generate HTML report
         run: |
