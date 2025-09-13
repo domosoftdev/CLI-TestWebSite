@@ -10,6 +10,7 @@ import argparse
 import sys
 import json
 import csv
+import os
 from datetime import datetime
 
 # Import the core logic and analyzer classes from the new structure
@@ -37,10 +38,11 @@ def get_hostname(url):
 
 # --- Reporting Functions ---
 
-def generate_json_report(results, hostname):
+def generate_json_report(results, hostname, output_dir="."):
     """Generates a JSON report from the analysis results."""
+    os.makedirs(output_dir, exist_ok=True)
     date_str = datetime.now().strftime('%d%m%y')
-    filename = f"{hostname}_{date_str}.json"
+    filename = os.path.join(output_dir, f"{hostname}_{date_str}.json")
     try:
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=4, ensure_ascii=False)
@@ -48,10 +50,11 @@ def generate_json_report(results, hostname):
     except IOError as e:
         print(f"\n❌ Erreur lors de l'écriture du rapport JSON : {e}")
 
-def generate_csv_report(results, hostname):
+def generate_csv_report(results, hostname, output_dir="."):
     """Generates a CSV report from the analysis results."""
+    os.makedirs(output_dir, exist_ok=True)
     date_str = datetime.now().strftime('%d%m%y')
-    filename = f"{hostname}_{date_str}.csv"
+    filename = os.path.join(output_dir, f"{hostname}_{date_str}.csv")
     header = ['Catégorie', 'Sous-catégorie', 'Statut', 'Criticité', 'Description', 'Vulnérabilités']
     rows = []
 
@@ -87,10 +90,11 @@ def generate_csv_report(results, hostname):
     except IOError as e:
         print(f"\n❌ Erreur lors de l'écriture du rapport CSV : {e}")
 
-def generate_html_report(results, hostname):
+def generate_html_report(results, hostname, output_dir="."):
     """Generates an HTML report from the analysis results."""
+    os.makedirs(output_dir, exist_ok=True)
     date_str = datetime.now().strftime('%d%m%y')
-    filename = f"{hostname}_{date_str}.html"
+    filename = os.path.join(output_dir, f"{hostname}_{date_str}.html")
     score = results.get('score_final', 0)
     grade = results.get('note', 'N/A')
 
@@ -156,6 +160,7 @@ def main():
     # Primary action: running a new scan
     parser.add_argument("--domain", help="Le nom de domaine du site web à analyser (ex: google.com).")
     parser.add_argument("--formats", type=str, default="", help="Génère des rapports dans les formats spécifiés, séparés par des virgules (ex: json,html,csv).")
+    parser.add_argument("--scans-dir", default="scans", help="Le répertoire pour lire et sauvegarder les rapports de scan.")
     parser.add_argument("--gdpr", action="store_true", help="Inclut une analyse de conformité RGPD (expérimental).")
     parser.add_argument("-v", "--verbose", action="store_true", help="Affiche des informations détaillées pendant l'exécution.")
 
@@ -182,15 +187,15 @@ def main():
 
         formats = [f.strip() for f in args.formats.lower().split(',') if f.strip()]
         if 'json' in formats:
-            generate_json_report(results, hostname)
+            generate_json_report(results, hostname, args.scans_dir)
         if 'csv' in formats:
-            generate_csv_report(results, hostname)
+            generate_csv_report(results, hostname, args.scans_dir)
         if 'html' in formats:
-            generate_html_report(results, hostname)
+            generate_html_report(results, hostname, args.scans_dir)
 
     # Handle reporting actions
     elif args.list_scans or args.compare or args.status or args.graph:
-        consolidator = Consolidator(verbose=args.verbose)
+        consolidator = Consolidator(scans_dir=args.scans_dir, verbose=args.verbose)
         if not consolidator.all_scans:
              print("Aucun rapport de scan trouvé. Exécutez une analyse avec --domain d'abord.")
              sys.exit(1)
@@ -202,7 +207,7 @@ def main():
         if args.status:
             consolidator.display_scan_status()
         if args.graph:
-            consolidator.generate_evolution_graph(args.graph)
+            consolidator.generate_evolution_graph(args.graph, output_dir=args.scans_dir)
 
     else:
         parser.print_help()
