@@ -25,22 +25,23 @@ class Consolidator:
     """
     Gère le chargement, l'analyse et la présentation des résultats de scan.
     """
-    def __init__(self, verbose=False):
+    def __init__(self, scans_dir=None, verbose=False):
         self.verbose = verbose
+        self.scans_dir = scans_dir or SCAN_REPORTS_DIR
         self.all_scans = self._load_scan_results()
         if self.verbose:
-            print(f"Consolidator initialisé, {len(self.all_scans)} rapport(s) chargé(s).")
+            print(f"Consolidator initialisé, {len(self.all_scans)} rapport(s) chargé(s) depuis '{self.scans_dir}'.")
 
     def _load_scan_results(self):
         """
         Charge tous les rapports de scan JSON depuis le répertoire configuré.
         """
-        if not os.path.exists(SCAN_REPORTS_DIR):
+        if not os.path.exists(self.scans_dir):
             if self.verbose:
-                print(f"Le répertoire des scans '{SCAN_REPORTS_DIR}' n'existe pas.")
+                print(f"Le répertoire des scans '{self.scans_dir}' n'existe pas.")
             return []
 
-        scan_files = [f for f in os.listdir(SCAN_REPORTS_DIR) if f.endswith('.json')]
+        scan_files = [f for f in os.listdir(self.scans_dir) if f.endswith('.json')]
         results = []
         for filename in scan_files:
             try:
@@ -48,7 +49,7 @@ class Consolidator:
                 domain = "_".join(parts[:-1])
                 date_str = parts[-1]
                 scan_date = datetime.strptime(date_str, '%d%m%y')
-                filepath = os.path.join(SCAN_REPORTS_DIR, filename)
+                filepath = os.path.join(self.scans_dir, filename)
                 with open(filepath, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 results.append({"domain": domain, "date": scan_date, "data": data})
@@ -152,7 +153,7 @@ class Consolidator:
         if not fixed_vulns and not new_vulns:
             print("\n[😐] Aucune nouvelle vulnérabilité détectée et aucune n'a été corrigée.")
 
-    def generate_evolution_graph(self, domain):
+    def generate_evolution_graph(self, domain, output_dir="."):
         """Génère un graphique d'évolution du score pour un domaine spécifique."""
         scans_for_domain = sorted([s for s in self.all_scans if s['domain'] == domain], key=lambda x: x['date'])
         if len(scans_for_domain) < 2:
@@ -170,7 +171,8 @@ class Consolidator:
         plt.ylim(bottom=0, top=max(scores) + 10)
         plt.gcf().autofmt_xdate()
 
-        filename = EVOLUTION_GRAPH_FILE_FORMAT.format(domain=domain)
+        os.makedirs(output_dir, exist_ok=True)
+        filename = os.path.join(output_dir, EVOLUTION_GRAPH_FILE_FORMAT.format(domain=domain))
         try:
             plt.savefig(filename, bbox_inches='tight')
             print(f"✅ Graphique d'évolution '{filename}' généré avec succès.")
