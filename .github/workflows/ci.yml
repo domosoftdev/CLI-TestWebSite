@@ -11,9 +11,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Debug structure
-        run: ls -R
-
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -24,12 +21,10 @@ jobs:
 
       - name: Install dependencies
         run: npm install
-        working-directory: .
 
       - name: Run tests and generate HTML report
         run: |
           npx jest --ci
-        working-directory: ./CLITestwebsite
         env:
           CI: true
 
@@ -38,4 +33,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-report
-          path: CLITestwebsite/test-report.html
+          path: test-report.html
