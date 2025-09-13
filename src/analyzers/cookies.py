@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
@@ -9,9 +8,12 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import WebDriverException
 
+from src.config import CONSENT_BANNER_SELECTORS, SELENIUM_PAGE_LOAD_TIMEOUT
+
 class CookieAnalyzer:
-    def __init__(self):
+    def __init__(self, verbose=False):
         self.driver = None
+        self.verbose = verbose
 
     def _setup_driver(self):
         """Configure et initialise le WebDriver Selenium."""
@@ -21,9 +23,10 @@ class CookieAnalyzer:
         chrome_options.add_argument("--disable-dev-shm-usage")
         try:
             self.driver = webdriver.Chrome(options=chrome_options)
-            self.driver.set_page_load_timeout(20)
+            self.driver.set_page_load_timeout(SELENIUM_PAGE_LOAD_TIMEOUT)
         except WebDriverException as e:
-            print(f"Erreur WebDriver: {e}")
+            if self.verbose:
+                print(f"Erreur WebDriver: {e}")
             self.driver = None
 
     def _teardown_driver(self):
@@ -50,13 +53,7 @@ class CookieAnalyzer:
         except WebDriverException as e:
             return {"present": False, "error": f"Failed to load page: {e}"}
 
-        consent_selectors = [
-            '[class*="cookie"]', '[id*="cookie"]',
-            '[class*="consent"]', '[id*="consent"]',
-            '[class*="gdpr"]', '[id*="gdpr"]'
-        ]
-
-        for selector in consent_selectors:
+        for selector in CONSENT_BANNER_SELECTORS:
             try:
                 if self.driver.find_elements(By.CSS_SELECTOR, selector):
                     return {"present": True, "selector": selector, "error": None}
