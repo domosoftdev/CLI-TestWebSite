@@ -21,6 +21,9 @@ from sslyze import (
     ScanCommandAttemptStatusEnum,
     ServerScanStatusEnum,
 )
+from cryptography.x509.oid import ExtensionOID
+from cryptography.x509 import general_name
+from cryptography.hazmat.primitives.asymmetric import rsa, ec
 from sslyze.plugins.scan_commands import ScanCommand
 
 # Importation depuis la nouvelle structure de modules et configuration
@@ -132,70 +135,75 @@ class SecurityAnalyzer:
 
             for result in scanner.get_results():
                 if result.scan_status != ServerScanStatusEnum.COMPLETED:
-                    # Handle connectivity errors
-                    error_msg = f"Impossible de se connecter à {hostname} pour la vérification du certificat."
-                    if result.scan_status == ServerScanStatusEnum.ERROR_NO_CONNECTIVITY:
-                        error_msg = "La connexion au serveur a échoué (timeout ou problème réseau)."
-                    return {"statut": "ERROR", "message": error_msg, "criticite": "HIGH"}
+                    return {"statut": "ERROR", "message": "La connexion au serveur a échoué.", "criticite": "HIGH"}
 
-                # We have a result, let's process it
                 cert_info_attempt = result.scan_result.certificate_info
                 if cert_info_attempt.status == ScanCommandAttemptStatusEnum.ERROR:
-                    return {"statut": "ERROR", "message": f"La commande de scan de certificat a échoué: {cert_info_attempt.error_reason}", "criticite": "HIGH"}
+                    return {"statut": "ERROR", "message": f"Scan de certificat échoué: {cert_info_attempt.error_reason}", "criticite": "HIGH"}
 
-                cert_info_result = cert_info_attempt.result
-                if not cert_info_result.certificate_deployments:
-                    return {"statut": "ERROR", "message": "Aucun certificat n'a été reçu du serveur.", "criticite": "HIGH"}
+                cert_info = cert_info_attempt.result
+                if not cert_info.certificate_deployments:
+                    return {"statut": "ERROR", "message": "Aucun certificat reçu.", "criticite": "HIGH"}
 
-                deployment = cert_info_result.certificate_deployments[0]
-                validation_result = deployment.path_validation_results[0]
-                cert_chain = deployment.received_certificate_chain
-                leaf_cert = cert_chain[0]
+                deployment = cert_info.certificate_deployments[0]
+                leaf_cert = deployment.received_certificate_chain[0]
+                validation = deployment.path_validation_results[0]
 
-                # Basic certificate details
-                subject = leaf_cert.subject.rfc4514_string()
-                issuer = leaf_cert.issuer.rfc4514_string()
-                exp_date = leaf_cert.not_valid_after
-                jours_restants = (exp_date - datetime.now(exp_date.tzinfo)).days
+                points_a_corriger = []
 
+                # 1. Chain of trust
+                if not validation.was_validation_successful:
+                    error_str = str(validation.validation_error)
+                    if "unable to get local issuer certificate" in error_str or "candidates exhausted" in error_str:
+                        points_a_corriger.append({
+                            "message": "La chaîne de certificats est incomplète. Le serveur ne fournit probablement pas tous les certificats intermédiaires.",
+                            "criticite": "MEDIUM"
+                        })
+                    else:
+                        points_a_corriger.append({"message": f"La chaîne de certificats n'est pas fiable: {error_str}", "criticite": "HIGH"})
+
+                # 2. Temporal Validity
+                jours_restants = (leaf_cert.not_valid_after - datetime.now(leaf_cert.not_valid_after.tzinfo)).days
+                if jours_restants < 0:
+                    points_a_corriger.append({"message": "Le certificat a expiré.", "criticite": "CRITICAL"})
+                elif jours_restants < 30:
+                    points_a_corriger.append({"message": f"Le certificat expire bientôt (dans {jours_restants} jours).", "criticite": "LOW"})
+
+                # 3. Crypto Strength
+                public_key = leaf_cert.public_key()
+                key_info = "Inconnu"
+                if isinstance(public_key, rsa.RSAPublicKey):
+                    key_info = f"RSA {public_key.key_size} bits"
+                    if public_key.key_size < 2048:
+                        points_a_corriger.append({"message": f"La taille de la clé RSA ({public_key.key_size} bits) est inférieure au minimum recommandé de 2048 bits.", "criticite": "HIGH"})
+                elif isinstance(public_key, ec.EllipticCurvePublicKey):
+                    key_info = f"ECDSA {public_key.curve.name} ({public_key.curve.key_size} bits)"
+                    if public_key.curve.key_size < 256:
+                         points_a_corriger.append({"message": f"La taille de la clé ECDSA ({public_key.curve.key_size} bits) est inférieure au minimum recommandé de 256 bits.", "criticite": "HIGH"})
+
+                sig_algo = leaf_cert.signature_hash_algorithm.name if leaf_cert.signature_hash_algorithm else "inconnu"
+                if sig_algo.lower() in ['md5', 'sha1']:
+                     points_a_corriger.append({"message": f"L'algorithme de signature ({sig_algo}) est faible et obsolète.", "criticite": "HIGH"})
+
+                # Final result construction
                 result_dict = {
-                    "sujet": subject,
-                    "emetteur": issuer,
-                    "date_expiration": exp_date.strftime('%Y-%m-%d'),
-                    "jours_restants": jours_restants,
-                    "certificate_chain": [cert.subject.rfc4514_string() for cert in cert_chain]
+                    "statut": "SUCCESS",
+                    "message": "Analyse du certificat terminée.",
+                    "criticite": "INFO",
+                    "points_a_corriger": points_a_corriger,
+                    "details": {
+                        "date_expiration": leaf_cert.not_valid_after.strftime('%Y-%m-%d'),
+                        "jours_restants": jours_restants,
+                        "noms_alternatifs_sujet (SAN)": [name for name in leaf_cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value.get_values_for_type(general_name.DNSName)],
+                        "chaine_de_certificats": [cert.subject.rfc4514_string() for cert in deployment.received_certificate_chain],
+                        "force_cle_publique": key_info,
+                        "algorithme_signature": sig_algo,
+                    }
                 }
-
-                if not validation_result.was_validation_successful:
-                    error_message = f"La chaîne de certificats n'est pas fiable. Erreur : {validation_result.validation_error}"
-                    # Check for a common specific error: incomplete chain
-                    if "unable to get local issuer certificate" in str(validation_result.validation_error):
-                        error_message = "La vérification du certificat a échoué car la chaîne de certificats est incomplète. Le serveur ne fournit probablement pas tous les certificats intermédiaires nécessaires."
-
-                    result_dict.update({
-                        "statut": "ERROR",
-                        "message": error_message,
-                        "criticite": "HIGH",
-                        "remediation_id": "CERT_CHAIN_INVALID"
-                    })
-                elif jours_restants < 0:
-                    result_dict.update({
-                        "statut": "ERROR",
-                        "message": "Le certificat a expiré.",
-                        "criticite": "CRITICAL",
-                        "remediation_id": "CERT_EXPIRED"
-                    })
-                else:
-                    result_dict.update({
-                        "statut": "SUCCESS",
-                        "message": "Le certificat est valide et la chaîne de confiance est correcte.",
-                        "criticite": "INFO"
-                    })
                 return result_dict
 
         except Exception as e:
-            # Catch-all for other unexpected errors during the scan setup
-            return {"statut": "ERROR", "message": f"Erreur inattendue lors de la vérification du certificat via sslyze: {e}", "criticite": "HIGH"}
+            return {"statut": "ERROR", "message": f"Erreur inattendue: {e}", "criticite": "HIGH"}
 
     def _scan_tls_protocols(self, hostname):
         if self.verbose: print(f"  - Scan des protocoles TLS pour {hostname}")
