@@ -124,27 +124,71 @@ class SecurityAnalyzer:
 
     def _check_ssl_certificate(self, hostname):
         if self.verbose: print(f"  - Vérification du certificat SSL pour {hostname}")
-        context = ssl.create_default_context()
         try:
-            with socket.create_connection((hostname, 443), timeout=DEFAULT_TIMEOUT) as sock:
-                with context.wrap_socket(sock, server_hostname=hostname) as ssock:
-                    cert = ssock.getpeercert()
-                    subject = dict(x[0] for x in cert['subject'])
-                    issuer = dict(x[0] for x in cert.get('issuer', []))
-                    exp_date = datetime.strptime(cert['notAfter'], '%b %d %H:%M:%S %Y %Z')
-                    jours_restants = (exp_date - datetime.now()).days
-                    result = {"sujet": subject.get('commonName', 'N/A'), "emetteur": issuer.get('commonName', 'N/A'), "date_expiration": exp_date.strftime('%Y-%m-%d'), "jours_restants": jours_restants}
-                    if jours_restants < 0:
-                        result.update({"statut": "ERROR", "message": "Le certificat a expiré.", "criticite": "CRITICAL", "remediation_id": "CERT_EXPIRED"})
-                    else:
-                        result.update({"statut": "SUCCESS", "message": "Le certificat est valide.", "criticite": "INFO"})
-                    return result
-        except ssl.SSLCertVerificationError as e:
-            return {"statut": "ERROR", "message": f"La vérification du certificat a échoué ({e.reason}).", "criticite": "HIGH", "remediation_id": "CERT_VERIFY_FAILED"}
-        except socket.timeout:
-            return {"statut": "ERROR", "message": "La connexion au serveur a échoué (timeout).", "criticite": "HIGH"}
+            server_location = ServerNetworkLocation(hostname=hostname, port=443)
+            scan_request = ServerScanRequest(server_location=server_location, scan_commands={ScanCommand.CERTIFICATE_INFO})
+            scanner = Scanner()
+            scanner.queue_scans([scan_request])
+
+            for result in scanner.get_results():
+                if result.scan_status != ServerScanStatusEnum.COMPLETED:
+                    # Handle connectivity errors
+                    error_msg = f"Impossible de se connecter à {hostname} pour la vérification du certificat."
+                    if result.scan_status == ServerScanStatusEnum.ERROR_NO_CONNECTIVITY:
+                        error_msg = "La connexion au serveur a échoué (timeout ou problème réseau)."
+                    return {"statut": "ERROR", "message": error_msg, "criticite": "HIGH"}
+
+                # We have a result, let's process it
+                cert_info_result = result.scan_result.certificate_info
+                if cert_info_result.status == ScanCommandAttemptStatusEnum.ERROR:
+                    return {"statut": "ERROR", "message": f"La commande de scan de certificat a échoué: {cert_info_result.error_reason}", "criticite": "HIGH"}
+
+                validation_result = cert_info_result.result.path_validation_results[0]
+                leaf_cert = cert_info_result.result.certificate_chain[0]
+
+                # Basic certificate details
+                subject = leaf_cert.subject.rfc4514_string()
+                issuer = leaf_cert.issuer.rfc4514_string()
+                exp_date = leaf_cert.not_valid_after
+                jours_restants = (exp_date - datetime.now(exp_date.tzinfo)).days
+
+                result_dict = {
+                    "sujet": subject,
+                    "emetteur": issuer,
+                    "date_expiration": exp_date.strftime('%Y-%m-%d'),
+                    "jours_restants": jours_restants
+                }
+
+                if not validation_result.is_trusted:
+                    error_message = f"La chaîne de certificats n'est pas fiable. Erreur : {validation_result.validation_error}"
+                    # Check for a common specific error: incomplete chain
+                    if "unable to get local issuer certificate" in str(validation_result.validation_error):
+                        error_message = "La vérification du certificat a échoué car la chaîne de certificats est incomplète. Le serveur ne fournit probablement pas tous les certificats intermédiaires nécessaires."
+
+                    result_dict.update({
+                        "statut": "ERROR",
+                        "message": error_message,
+                        "criticite": "HIGH",
+                        "remediation_id": "CERT_CHAIN_INVALID"
+                    })
+                elif jours_restants < 0:
+                    result_dict.update({
+                        "statut": "ERROR",
+                        "message": "Le certificat a expiré.",
+                        "criticite": "CRITICAL",
+                        "remediation_id": "CERT_EXPIRED"
+                    })
+                else:
+                    result_dict.update({
+                        "statut": "SUCCESS",
+                        "message": "Le certificat est valide et la chaîne de confiance est correcte.",
+                        "criticite": "INFO"
+                    })
+                return result_dict
+
         except Exception as e:
-            return {"statut": "ERROR", "message": f"Erreur inattendue lors de la vérification du certificat : {e}", "criticite": "HIGH"}
+            # Catch-all for other unexpected errors during the scan setup
+            return {"statut": "ERROR", "message": f"Erreur inattendue lors de la vérification du certificat via sslyze: {e}", "criticite": "HIGH"}
 
     def _scan_tls_protocols(self, hostname):
         if self.verbose: print(f"  - Scan des protocoles TLS pour {hostname}")
