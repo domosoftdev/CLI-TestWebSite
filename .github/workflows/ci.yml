@@ -21,10 +21,12 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+        working-directory: ./CLITestwebsite
 
       - name: Run tests and generate HTML report
         run: |
           npx jest --ci
+        working-directory: ./CLITestwebsite
         env:
           CI: true
 
@@ -33,4 +35,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-report
-          path: test-report.html
+          path: CLITestwebsite/test-report.html
