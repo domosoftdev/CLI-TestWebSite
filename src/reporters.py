@@ -113,9 +113,11 @@ def generate_html_report(results, hostname, output_dir="."):
         <style>
             body {{ font-family: sans-serif; margin: 2em; }}
             h1, h2, h3 {{ color: #333; }}
-            .report-container {{ display: flex; flex-wrap: wrap; gap: 2em; }}
-            .main-content {{ flex: 3; min-width: 600px; }}
-            .sidebar {{ flex: 1; min-width: 300px; }}
+            .report-header {{ display: flex; align-items: center; gap: 2em; border-bottom: 2px solid #ccc; padding-bottom: 1em; margin-bottom: 2em; }}
+            .header-main {{ flex: 3; }}
+            .header-sidebar {{ flex: 1; }}
+            .grading-table table {{ font-size: 0.9em; width: 100%; }}
+            .grading-table h3 {{ margin-top: 0; }}
             .report-group {{ border: 2px solid #007bff; padding: 20px; margin-bottom: 25px; border-radius: 8px; background-color: #f8f9fa; }}
             .report-section {{ border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 5px; background-color: #fff;}}
             .group-description {{ font-style: italic; color: #555; margin-bottom: 20px; }}
@@ -130,19 +132,31 @@ def generate_html_report(results, hostname, output_dir="."):
         </style>
     </head>
     <body>
-        <h1>Rapport d'Analyse de Sécurité pour {hostname}</h1>
-        <h2>Score de Dangerosité : {score} (Note: {grade})</h2>
-        <div class="report-container">
-            <div class="main-content">
+        <header class="report-header">
+            <div class="header-main">
+                <h1>Rapport d'Analyse de Sécurité pour {hostname}</h1>
+                <h2>Score de Dangerosité : {score} (Note: {grade})</h2>
+            </div>
+            <div class="header-sidebar">
+                <div class='grading-table'>
+                    <h3>Légende des Notes</h3>
+                    <table>
+                        <tr><th>Note</th><th>Score</th><th>Niveau</th></tr>
+                        <tr><td>A</td><td>90-100</td><td style="color:green;">Excellent</td></tr>
+                        <tr><td>B</td><td>80-89</td><td style="color:blue;">Bon</td></tr>
+                        <tr><td>C</td><td>70-79</td><td style="color:orange;">Moyen</td></tr>
+                        <tr><td>D</td><td>60-69</td><td style="color:darkorange;">Passable</td></tr>
+                        <tr><td>F</td><td>0-59</td><td style="color:red;">Insuffisant</td></tr>
+                    </table>
+                </div>
+            </div>
+        </header>
     """
 
     rendered_categories = set()
 
-    main_report_content = ""
-
     # --- Helper function to render a single category ---
     def render_category(category, data):
-        # Use a more descriptive title if available, otherwise format the category key
         title_map = {
             "ssl_certificate": "Certificat SSL/TLS", "tls_protocols": "Protocoles TLS", "http_redirect": "Redirection HTTP",
             "security_headers": "En-têtes de sécurité", "cookie_security": "Sécurité des cookies", "dns_records": "Enregistrements DNS",
@@ -152,7 +166,6 @@ def generate_html_report(results, hostname, output_dir="."):
         title = title_map.get(category, category.replace('_', ' ').title())
         content = f"<div class='report-section'><h3>{title}</h3>"
 
-        # Specific Handlers for each category type
         if category == 'ssl_certificate' and isinstance(data, dict):
             status_class = data.get('statut', 'INFO')
             content += f"<p class='status-{status_class}'><strong>Statut global :</strong> {data.get('message', 'N/A')}</p>"
@@ -200,6 +213,7 @@ def generate_html_report(results, hostname, output_dir="."):
         return content
 
     # --- Render structured groups ---
+    main_report_content = ""
     for group_title, group_data in report_structure.items():
         main_report_content += f"<div class='report-group'><h2>{group_title}</h2>"
         main_report_content += f"<p class='group-description'>{group_data['description']}</p>"
@@ -219,25 +233,7 @@ def generate_html_report(results, hostname, output_dir="."):
         main_report_content += f"<div class='report-group'><h2>Autres Analyses</h2>{other_categories_content}</div>"
 
     html_content += main_report_content
-    html_content += """
-            </div>
-            <div class='sidebar'>
-                <div class='report-section'>
-                    <h3>Légende des Notes</h3>
-                    <table>
-                        <tr><th>Note</th><th>Score</th><th>Niveau</th></tr>
-                        <tr><td>A</td><td>90-100</td><td style="color:green;">Excellent</td></tr>
-                        <tr><td>B</td><td>80-89</td><td style="color:blue;">Bon</td></tr>
-                        <tr><td>C</td><td>70-79</td><td style="color:orange;">Moyen</td></tr>
-                        <tr><td>D</td><td>60-69</td><td style="color:darkorange;">Passable</td></tr>
-                        <tr><td>F</td><td>0-59</td><td style="color:red;">Insuffisant</td></tr>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
+    html_content += "</body></html>"
 
     # --- Write to file ---
     try:
