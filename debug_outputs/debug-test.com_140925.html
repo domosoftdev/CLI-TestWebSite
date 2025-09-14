@@ -1,0 +1,17 @@
+<!DOCTYPE html><html><head><title>Rapport de Sécurité - debug-test.com</title></head><body><h1>Rapport d'Analyse de Sécurité pour debug-test.com</h1><h2>Score de Dangerosité : 75 (Note: C)</h2><div><h2>Ssl Certificate</h2><p class='warning'><strong>Statut global :</strong> WARNING (Le certificat SSL expire bientôt.)</p><strong>Points à corriger :</strong><ul><li><strong>[MEDIUM]</strong>: Le certificat expire dans moins de 30 jours.</li></ul><strong>Détails techniques :</strong><ul><li><strong>Expire dans:</strong> 25 jours</li><li><strong>Force de la clé:</strong> 4096 bits</li><li><strong>Algorithme de signature:</strong> SHA-256 with RSA Encryption</li><li><strong>Noms alternatifs (SAN):</strong><ul><li>debug-test.com</li><li>www.debug-test.com</li></ul></li><li><strong>Chaîne de confiance:</strong><ul><li>Intermediate CA</li><li>Root CA</li></ul></li></ul></div><div><h2>Headers</h2><pre>[
+  {
+    "nom": "Strict-Transport-Security",
+    "statut": "SUCCESS",
+    "criticite": "INFO",
+    "message": "HSTS est bien configuré."
+  },
+  {
+    "nom": "X-Frame-Options",
+    "statut": "ERROR",
+    "criticite": "HIGH",
+    "message": "L'en-tête X-Frame-Options est manquant."
+  }
+]</pre></div><div><h2>Some Other Category</h2><pre>{
+  "statut": "INFO",
+  "message": "Ceci est une catégorie de test."
+}</pre></div></body></html>
