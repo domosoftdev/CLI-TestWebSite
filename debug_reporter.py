@@ -33,42 +33,67 @@ def main():
 
     # Sample data for the report
     results = {
-        "score_final": 75,
-        "note": "C",
+        "score_final": 42,
+        "note": "D",
         "hostname": hostname,
         "ssl_certificate": {
-            "statut": "WARNING",
-            "message": "Le certificat SSL expire bientôt.",
-            "criticite": "MEDIUM",
-            "points_a_corriger": [
-                {"criticite": "MEDIUM", "message": "Le certificat expire dans moins de 30 jours."}
-            ],
-            "details": {
-                "jours_restants": 25,
-                "force_cle_publique": "4096 bits",
-                "algorithme_signature": "SHA-256 with RSA Encryption",
-                "noms_alternatifs_sujet (SAN)": ["debug-test.com", "www.debug-test.com"],
-                "chaine_de_certificats": ["Intermediate CA", "Root CA"]
-            }
+          "statut": "ERROR",
+          "message": "La vérification du certificat a échoué (CERTIFICATE_VERIFY_FAILED).",
+          "criticite": "HIGH",
+          "remediation_id": "CERT_VERIFY_FAILED"
         },
-        "headers": [
-            {
-                "nom": "Strict-Transport-Security",
-                "statut": "SUCCESS",
-                "criticite": "INFO",
-                "message": "HSTS est bien configuré."
-            },
-            {
-                "nom": "X-Frame-Options",
-                "statut": "ERROR",
-                "criticite": "HIGH",
-                "message": "L'en-tête X-Frame-Options est manquant."
-            }
+        "tls_protocols": [
+          { "protocole": "SSL 2.0", "statut": "SUCCESS", "message": "Non supporté", "criticite": "INFO" },
+          { "protocole": "SSL 3.0", "statut": "SUCCESS", "message": "Non supporté", "criticite": "INFO" },
+          { "protocole": "TLS 1.0", "statut": "SUCCESS", "message": "Non supporté", "criticite": "INFO" },
+          { "protocole": "TLS 1.1", "statut": "SUCCESS", "message": "Non supporté", "criticite": "INFO" },
+          { "protocole": "TLS 1.2", "statut": "SUCCESS", "message": "Supporté", "criticite": "INFO" },
+          { "protocole": "TLS 1.3", "statut": "SUCCESS", "message": "Supporté", "criticite": "INFO" }
         ],
-        "some_other_category": {
-            "statut": "INFO",
-            "message": "Ceci est une catégorie de test."
-        }
+        "http_redirect": {
+          "statut": "SUCCESS",
+          "message": "Redirection correcte vers HTTPS.",
+          "criticite": "INFO"
+        },
+        "security_headers": {
+          "statut": "ERROR",
+          "message": "Erreur lors de la récupération des en-têtes: HTTPSConnectionPool(host='robonic.fi', port=443): Max retries exceeded with url: / (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)')))",
+          "criticite": "HIGH"
+        },
+        "cookie_security": [
+          {
+            "statut": "ERROR",
+            "message": "Erreur lors de la récupération des cookies: HTTPSConnectionPool(host='robonic.fi', port=443): Max retries exceeded with url: / (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)')))",
+            "criticite": "HIGH"
+          }
+        ],
+        "cms_footprint_meta": {
+          "statut": "ERROR",
+          "message": "Erreur lors de l'analyse CMS: HTTPSConnectionPool(host='robonic.fi', port=443): Max retries exceeded with url: / (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)')))",
+          "criticite": "HIGH"
+        },
+        "cms_footprint_paths": [],
+        "dns_records": {
+          "ns": { "statut": "SUCCESS", "valeurs": ["ns4.printcom.fi.", "ns3.printcom.fi.", "ns.pcom.fi.", "ns1.pcom.fi."], "criticite": "INFO" },
+          "a": { "statut": "SUCCESS", "valeurs": ["185.55.85.15"], "criticite": "INFO" },
+          "mx": { "statut": "SUCCESS", "valeurs": ["Prio 0: robonic-fi.mail.protection.outlook.com."], "criticite": "INFO" },
+          "dmarc": { "statut": "SUCCESS", "valeur": "v=DMARC1; p=quarantine; rua=mailto:dmarc_agg@vali.email", "criticite": "INFO" },
+          "spf": { "statut": "ERROR", "message": "Aucun enregistrement TXT trouvé.", "criticite": "HIGH" }
+        },
+        "js_libraries": [
+          {
+            "statut": "ERROR",
+            "message": "Erreur lors de l'analyse des bibliothèques JS: HTTPSConnectionPool(host='robonic.fi', port=443): Max retries exceeded with url: / (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)')))",
+            "criticite": "HIGH"
+          }
+        ],
+        "whois_info": {
+          "statut": "SUCCESS", "criticite": "INFO", "registrar": "Printcom Center Oy", "creation_date": "1999-07-19T00:00:00",
+          "expiration_date": "2026-08-31T00:00:00", "updated_date": "2020-12-08T00:00:00", "domain_status": "Registered",
+          "name_servers": "ns4.printcom.fi, ns1.pcom.fi, ns3.printcom.fi, ns.pcom.fi", "dnssec": "Activé",
+          "registrant_name": "ROBONIC LTD OY", "registrant_org": "N/A", "registrant_address": "Pinninkatu 53 C"
+        },
+        "parking_score": 20
     }
 
     # Ensure the output directory exists
