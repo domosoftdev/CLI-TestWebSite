@@ -15,21 +15,9 @@ def generate_json_report(results, hostname, output_dir="."):
     os.makedirs(output_dir, exist_ok=True)
     date_str = datetime.now().strftime('%d%m%y')
     filename = os.path.join(output_dir, f"{hostname}_{date_str}.json")
-
-    # Deep copy to avoid modifying the original results dictionary in memory
-    results_to_report = copy.deepcopy(results)
-
-    # Transform tls_protocols into a more compact, "horizontal" format
-    if 'tls_protocols' in results_to_report and isinstance(results_to_report['tls_protocols'], list):
-        transformed_protocols = {
-            item.get('protocole', 'N/A'): item.get('message', 'N/A')
-            for item in results_to_report['tls_protocols']
-        }
-        results_to_report['tls_protocols'] = transformed_protocols
-
     try:
         with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(results_to_report, f, indent=4, ensure_ascii=False)
+            json.dump(results, f, indent=4, ensure_ascii=False)
         print(f"\n✅ Rapport JSON généré avec succès : {filename}")
     except IOError as e:
         print(f"\n❌ Erreur lors de l'écriture du rapport JSON : {e}")
@@ -95,9 +83,25 @@ def generate_html_report(results, hostname, output_dir="."):
     score = results.get('score_final', 0)
     grade = results.get('note', 'N/A')
 
-    # Helper to get status color
-    def get_status_color(status):
-        return {"ERROR": "red", "WARNING": "orange", "SUCCESS": "green", "INFO": "blue"}.get(status, "black")
+    # --- Report Structure Definition ---
+    report_structure = {
+        "1. Configuration du protocole et du transport": {
+            "description": "Cette section vérifie la sécurité de la couche réseau et du chiffrement. 📌 Objectif : garantir que la communication est sécurisée et que les protections de base sont en place.",
+            "categories": ["ssl_certificate", "tls_protocols", "http_redirect", "security_headers", "cookie_security"]
+        },
+        "🧠 2. Empreinte applicative et exposition CMS": {
+            "description": "Cette section analyse les traces laissées par les technologies côté serveur. 📌 Objectif : identifier les technologies exposées et les risques liés à des versions vulnérables.",
+            "categories": ["cms_footprint_meta", "cms_footprint_paths", "js_libraries"]
+        },
+        "🌐 3. Infrastructure DNS et identité du domaine": {
+            "description": "Cette section couvre la configuration DNS et les informations WHOIS. 📌 Objectif : vérifier la légitimité du domaine, la protection contre l’usurpation, et la configuration des serveurs.",
+            "categories": ["dns_records", "whois_info"]
+        },
+        "📈 4. Score et indicateurs complémentaires": {
+            "description": "Cette section regroupe les métriques globales ou spécifiques. 📌 Objectif : fournir une synthèse ou un indicateur complémentaire.",
+            "categories": ["parking_score"]
+        }
+    }
 
     # --- Start of HTML content ---
     html_content = f"""
@@ -109,7 +113,9 @@ def generate_html_report(results, hostname, output_dir="."):
         <style>
             body {{ font-family: sans-serif; margin: 2em; }}
             h1, h2, h3 {{ color: #333; }}
-            .report-section {{ border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 5px; }}
+            .report-group {{ border: 2px solid #007bff; padding: 20px; margin-bottom: 25px; border-radius: 8px; background-color: #f8f9fa; }}
+            .report-section {{ border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 5px; background-color: #fff;}}
+            .group-description {{ font-style: italic; color: #555; margin-bottom: 20px; }}
             .status-ERROR {{ color: red; font-weight: bold; }}
             .status-WARNING {{ color: orange; font-weight: bold; }}
             .status-SUCCESS {{ color: green; }}
@@ -125,66 +131,85 @@ def generate_html_report(results, hostname, output_dir="."):
         <h2>Score de Dangerosité : {score} (Note: {grade})</h2>
     """
 
-    # --- Loop through results ---
-    for category, data in results.items():
-        if category in ['hostname', 'score_final', 'note']:
-            continue
+    rendered_categories = set()
 
-        html_content += f"<div class='report-section'><h2>{category.replace('_', ' ').title()}</h2>"
+    # --- Helper function to render a single category ---
+    def render_category(category, data):
+        # Use a more descriptive title if available, otherwise format the category key
+        title_map = {
+            "ssl_certificate": "Certificat SSL/TLS", "tls_protocols": "Protocoles TLS", "http_redirect": "Redirection HTTP",
+            "security_headers": "En-têtes de sécurité", "cookie_security": "Sécurité des cookies", "dns_records": "Enregistrements DNS",
+            "whois_info": "Informations Whois", "cms_footprint_meta": "Détection de CMS (Méta)", "cms_footprint_paths": "Détection de CMS (Chemins)",
+            "js_libraries": "Bibliothèques JavaScript", "parking_score": "Score de Parking"
+        }
+        title = title_map.get(category, category.replace('_', ' ').title())
+        content = f"<div class='report-section'><h3>{title}</h3>"
 
-        # --- Specific Handlers for each category ---
-
+        # Specific Handlers for each category type
         if category == 'ssl_certificate' and isinstance(data, dict):
             status_class = data.get('statut', 'INFO')
-            html_content += f"<p class='status-{status_class}'><strong>Statut global :</strong> {data.get('message', 'N/A')}</p>"
+            content += f"<p class='status-{status_class}'><strong>Statut global :</strong> {data.get('message', 'N/A')}</p>"
             if data.get('points_a_corriger'):
-                html_content += "<strong>Points à corriger :</strong><ul>"
+                content += "<strong>Points à corriger :</strong><ul>"
                 for point in data['points_a_corriger']:
-                    html_content += f"<li><strong class='status-{point.get('criticite')}'>[{point.get('criticite')}]</strong>: {point.get('message')}</li>"
-                html_content += "</ul>"
+                    content += f"<li><strong class='status-{point.get('criticite')}'>[{point.get('criticite')}]</strong>: {point.get('message')}</li>"
+                content += "</ul>"
             if data.get('details'):
-                html_content += "<strong>Détails techniques :</strong><ul>"
+                content += "<strong>Détails techniques :</strong><ul>"
                 for key, value in data['details'].items():
-                    html_content += f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>"
-                html_content += "</ul>"
-
+                    content += f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>"
+                content += "</ul>"
         elif category == 'tls_protocols' and isinstance(data, list):
-            html_content += "<table><tr><th>Protocole</th><th>Statut</th><th>Message</th></tr>"
+            content += "<table><tr><th>Protocole</th><th>Statut</th><th>Message</th></tr>"
             for item in data:
                 status_class = item.get('statut', 'INFO')
-                html_content += f"<tr><td>{item.get('protocole')}</td><td class='status-{status_class}'>{item.get('statut')}</td><td>{item.get('message')}</td></tr>"
-            html_content += "</table>"
-
+                content += f"<tr><td>{item.get('protocole')}</td><td class='status-{status_class}'>{item.get('statut')}</td><td>{item.get('message')}</td></tr>"
+            content += "</table>"
         elif category == 'dns_records' and isinstance(data, dict):
-            html_content += "<ul>"
+            content += "<ul>"
             for record_type, record_data in data.items():
                 status_class = record_data.get('statut', 'INFO')
                 valeurs = record_data.get('valeurs') or [record_data.get('valeur')]
                 message = record_data.get('message', ', '.join(filter(None, valeurs)))
-                html_content += f"<li><strong>{record_type.upper()}:</strong> <span class='status-{status_class}'>[{record_data.get('criticite', 'N/A')}]</span> {message}</li>"
-            html_content += "</ul>"
-
+                content += f"<li><strong>{record_type.upper()}:</strong> <span class='status-{status_class}'>[{record_data.get('criticite', 'N/A')}]</span> {message}</li>"
+            content += "</ul>"
         elif category == 'whois_info' and isinstance(data, dict):
-            html_content += "<ul>"
+            content += "<ul>"
             for key, value in data.items():
                  if key not in ['statut', 'criticite']:
-                    html_content += f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>"
-            html_content += "</ul>"
-
+                    content += f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>"
+            content += "</ul>"
         elif isinstance(data, dict) and 'statut' in data:
             status_class = data.get('statut', 'INFO')
-            html_content += f"<p class='status-{status_class}'><strong>[{data.get('criticite')}]</strong> {data.get('message')}</p>"
-
+            content += f"<p class='status-{status_class}'><strong>[{data.get('criticite')}]</strong> {data.get('message')}</p>"
         elif isinstance(data, list) and data and isinstance(data[0], dict) and 'statut' in data[0]:
              for item in data:
                 status_class = item.get('statut', 'INFO')
-                html_content += f"<p class='status-{status_class}'><strong>[{item.get('criticite')}]</strong> {item.get('message')}</p>"
-
+                content += f"<p class='status-{status_class}'><strong>[{item.get('criticite')}]</strong> {item.get('message')}</p>"
         else:
-            # Fallback for any other structure
-            html_content += f"<pre>{json.dumps(data, indent=2, ensure_ascii=False)}</pre>"
+            content += f"<pre>{json.dumps(data, indent=2, ensure_ascii=False)}</pre>"
 
+        content += "</div>"
+        return content
+
+    # --- Render structured groups ---
+    for group_title, group_data in report_structure.items():
+        html_content += f"<div class='report-group'><h2>{group_title}</h2>"
+        html_content += f"<p class='group-description'>{group_data['description']}</p>"
+        for category in group_data['categories']:
+            if category in results:
+                html_content += render_category(category, results[category])
+                rendered_categories.add(category)
         html_content += "</div>"
+
+    # --- Render remaining categories that were not in any group ---
+    other_categories_content = ""
+    for category, data in results.items():
+        if category not in rendered_categories and category not in ['hostname', 'score_final', 'note']:
+            other_categories_content += render_category(category, data)
+
+    if other_categories_content:
+        html_content += f"<div class='report-group'><h2>Autres Analyses</h2>{other_categories_content}</div>"
 
     html_content += "</body></html>"
 
