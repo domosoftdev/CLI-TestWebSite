@@ -18,7 +18,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
 
 try:
-    from reporters import generate_html_report
+    from reporters import generate_html_report, generate_json_report
 except ImportError:
     print("Error: Could not import 'generate_html_report' from 'src.reporters'.")
     print("Please ensure the file 'src/reporters.py' exists and the main refactoring has been applied.")
@@ -99,8 +99,11 @@ def main():
     # Ensure the output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
-    # Call the report generation function
+    # Call the report generation functions
+    print("\n--- Generating HTML Report ---")
     generate_html_report(results, hostname, output_dir)
+    print("\n--- Generating JSON Report ---")
+    generate_json_report(results, hostname, output_dir)
 
     print("\nDebug report generation process finished.")
     print(f"Check the '{output_dir}' directory for the HTML report.")
