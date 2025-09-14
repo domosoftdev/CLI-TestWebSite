@@ -113,6 +113,9 @@ def generate_html_report(results, hostname, output_dir="."):
         <style>
             body {{ font-family: sans-serif; margin: 2em; }}
             h1, h2, h3 {{ color: #333; }}
+            .report-container {{ display: flex; flex-wrap: wrap; gap: 2em; }}
+            .main-content {{ flex: 3; min-width: 600px; }}
+            .sidebar {{ flex: 1; min-width: 300px; }}
             .report-group {{ border: 2px solid #007bff; padding: 20px; margin-bottom: 25px; border-radius: 8px; background-color: #f8f9fa; }}
             .report-section {{ border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 5px; background-color: #fff;}}
             .group-description {{ font-style: italic; color: #555; margin-bottom: 20px; }}
@@ -129,9 +132,13 @@ def generate_html_report(results, hostname, output_dir="."):
     <body>
         <h1>Rapport d'Analyse de Sécurité pour {hostname}</h1>
         <h2>Score de Dangerosité : {score} (Note: {grade})</h2>
+        <div class="report-container">
+            <div class="main-content">
     """
 
     rendered_categories = set()
+
+    main_report_content = ""
 
     # --- Helper function to render a single category ---
     def render_category(category, data):
@@ -194,13 +201,13 @@ def generate_html_report(results, hostname, output_dir="."):
 
     # --- Render structured groups ---
     for group_title, group_data in report_structure.items():
-        html_content += f"<div class='report-group'><h2>{group_title}</h2>"
-        html_content += f"<p class='group-description'>{group_data['description']}</p>"
+        main_report_content += f"<div class='report-group'><h2>{group_title}</h2>"
+        main_report_content += f"<p class='group-description'>{group_data['description']}</p>"
         for category in group_data['categories']:
             if category in results:
-                html_content += render_category(category, results[category])
+                main_report_content += render_category(category, results[category])
                 rendered_categories.add(category)
-        html_content += "</div>"
+        main_report_content += "</div>"
 
     # --- Render remaining categories that were not in any group ---
     other_categories_content = ""
@@ -209,9 +216,28 @@ def generate_html_report(results, hostname, output_dir="."):
             other_categories_content += render_category(category, data)
 
     if other_categories_content:
-        html_content += f"<div class='report-group'><h2>Autres Analyses</h2>{other_categories_content}</div>"
+        main_report_content += f"<div class='report-group'><h2>Autres Analyses</h2>{other_categories_content}</div>"
 
-    html_content += "</body></html>"
+    html_content += main_report_content
+    html_content += """
+            </div>
+            <div class='sidebar'>
+                <div class='report-section'>
+                    <h3>Légende des Notes</h3>
+                    <table>
+                        <tr><th>Note</th><th>Score</th><th>Niveau</th></tr>
+                        <tr><td>A</td><td>90-100</td><td style="color:green;">Excellent</td></tr>
+                        <tr><td>B</td><td>80-89</td><td style="color:blue;">Bon</td></tr>
+                        <tr><td>C</td><td>70-79</td><td style="color:orange;">Moyen</td></tr>
+                        <tr><td>D</td><td>60-69</td><td style="color:darkorange;">Passable</td></tr>
+                        <tr><td>F</td><td>0-59</td><td style="color:red;">Insuffisant</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
 
     # --- Write to file ---
     try:
