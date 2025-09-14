@@ -49,16 +49,18 @@ class TestHtmlReportGeneration(unittest.TestCase):
         with open(expected_filename, 'r', encoding='utf-8') as f:
             content = f.read()
 
-            # Check for new card titles
-            self.assertIn("<h3>Sécurité SSL/TLS</h3>", content)
-            self.assertIn("<h3>Protocoles TLS</h3>", content)
-            self.assertIn("<h3>DNS & Informations WHOIS</h3>", content)
-
-            # Check that SSL certificate content is rendered
+            # Check for group titles and nested content
+            self.assertIn("<h3>Configuration du protocole et du transport</h3>", content)
+            self.assertIn("<h4>Certificat SSL/TLS</h4>", content)
             self.assertIn("Test SSL Error", content)
+            self.assertIn("<h4>Protocoles TLS</h4>", content)
+            self.assertIn("Supporté", content)
 
-            # Check that DNS content is rendered
+            self.assertIn("<h3>Infrastructure DNS et identité du domaine</h3>", content)
+            self.assertIn("<h4>Enregistrements DNS</h4>", content)
             self.assertIn("v=DMARC1;", content)
+            self.assertIn("<h4>Informations Whois</h4>", content)
+            self.assertIn("Test Registrar", content)
 
 if __name__ == '__main__':
     unittest.main()

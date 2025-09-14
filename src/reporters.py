@@ -104,7 +104,8 @@ def generate_html_report(results, hostname, output_dir="."):
     }
 
     # --- Start of HTML content ---
-    html_content = f"""
+    # Using a standard string and .format() to avoid f-string parsing issues with CSS
+    html_head = """
     <!DOCTYPE html>
     <html lang="fr">
     <head>
@@ -195,8 +196,8 @@ def generate_html_report(results, hostname, output_dir="."):
                 color: var(--color-primary);
             }}
             .report-grid {{
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+                display: flex;
+                flex-direction: column;
                 gap: 1.5em;
             }}
             .card {{
@@ -206,6 +207,27 @@ def generate_html_report(results, hostname, output_dir="."):
                 box-shadow: 0 4px 12px rgba(0,0,0,0.05);
                 display: flex;
                 flex-direction: column;
+            }}
+            .group-description {{
+                font-style: italic;
+                color: var(--color-text-light);
+                margin-bottom: 1.5em;
+                padding-bottom: 1em;
+                border-bottom: 1px solid var(--color-border);
+            }}
+            .category-subsection {{
+                padding: 1em;
+                margin-top: 1em;
+                border-radius: 6px;
+                border: 1px solid #f0f0f0;
+                background-color: #fcfcfc;
+            }}
+            .category-subsection h4 {{
+                margin: 0 0 0.8em 0;
+                color: var(--color-primary);
+                font-size: 1.1em;
+                border-bottom: 2px solid var(--color-secondary);
+                padding-bottom: 0.4em;
             }}
             .card-header {{
                 display: flex;
@@ -281,6 +303,9 @@ def generate_html_report(results, hostname, output_dir="."):
             <svg id="icon-warning" viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
         </div>
         <div class="container">
+    """
+
+    html_header = f"""
             <header class="report-header">
                 <div class="header-main">
                     <h1>Analyse de Sécurité</h1>
@@ -303,11 +328,12 @@ def generate_html_report(results, hostname, output_dir="."):
                 </div>
             </header>
     """
+    html_content = html_head.format(hostname=hostname) + html_header
 
     rendered_categories = set()
 
     title_map = {
-        "ssl_certificate": "Sécurité SSL/TLS",
+        "ssl_certificate": "Certificat SSL/TLS",
         "tls_protocols": "Protocoles TLS",
         "http_redirect": "Redirection HTTP",
         "security_headers": "En-têtes de sécurité",
@@ -315,7 +341,7 @@ def generate_html_report(results, hostname, output_dir="."):
         "cms_footprint_meta": "Empreinte CMS (Meta)",
         "cms_footprint_paths": "Empreinte CMS (Chemins)",
         "js_libraries": "Librairies Javascript",
-        "dns_records": "DNS & Informations WHOIS",
+        "dns_records": "Enregistrements DNS",
         "whois_info": "Informations Whois",
         "parking_score": "Score de Parking"
     }
@@ -391,46 +417,47 @@ def generate_html_report(results, hostname, output_dir="."):
     # --- Render structured groups into cards ---
     main_report_content = "<main class='report-grid'>"
 
-    # Combine all categories from the structure
-    all_structured_categories = []
-    for group_data in report_structure.values():
-        all_structured_categories.extend(group_data['categories'])
+    group_icon_map = {
+        "1. Configuration du protocole et du transport": "icon-lock",
+        "🧠 2. Empreinte applicative et exposition CMS": "icon-code",
+        "🌐 3. Infrastructure DNS et identité du domaine": "icon-dns",
+        "📈 4. Score et indicateurs complémentaires": "icon-chart"
+    }
 
-    # Render a card for each category that has results
-    for category in all_structured_categories:
-        if category in results:
-            data = results[category]
-            # Special case: merge whois_info into dns_records card
-            if category == 'whois_info':
-                continue # It will be handled along with dns_records
+    for group_title, group_data in report_structure.items():
+        group_content = ""
+        # Check if any category in this group has results
+        has_content = any(cat in results for cat in group_data['categories'])
 
-            title = title_map.get(category, category.replace('_', ' ').title())
-            icon_id = icon_map.get(category, "icon-chart")
+        if not has_content:
+            continue
 
-            card_content = "<div class='card-content'>"
+        for category in group_data['categories']:
+            if category in results:
+                title = title_map.get(category, category.replace('_', ' ').title())
+                group_content += f"<div class='category-subsection'>"
+                group_content += f"<h4>{title}</h4>"
+                group_content += render_category_content(category, results[category])
+                group_content += "</div>"
+                rendered_categories.add(category)
 
-            if category == 'dns_records':
-                card_content += render_category_content('dns_records', results.get('dns_records', {}))
-                if 'whois_info' in results:
-                    card_content += render_category_content('whois_info', results.get('whois_info', {}))
-                    rendered_categories.add('whois_info')
-            else:
-                card_content += render_category_content(category, data)
-
-            card_content += "</div>"
-
+        if group_content:
+            icon_id = group_icon_map.get(group_title, "icon-chart")
             main_report_content += f"""
             <div class='card'>
                 <div class='card-header'>
                     <svg class="icon"><use href="#{icon_id}"></use></svg>
-                    <h3>{title}</h3>
+                    <h3>{group_title.split('. ')[1]}</h3>
                 </div>
-                {card_content}
+                <div class='card-content'>
+                    <p class='group-description'>{group_data['description']}</p>
+                    {group_content}
+                </div>
             </div>
             """
-            rendered_categories.add(category)
 
     # --- Render remaining categories that were not in any group ---
+    # This part can be refactored or removed if all categories are in the structure
     other_categories_content = ""
     for category, data in results.items():
         if category not in rendered_categories and category not in ['hostname', 'score_final', 'note']:
@@ -442,7 +469,7 @@ def generate_html_report(results, hostname, output_dir="."):
             <div class='card'>
                 <div class='card-header'>
                     <svg class="icon"><use href="#{icon_id}"></use></svg>
-                    <h3>{title}</h3>
+                    <h3>{title} (Non groupé)</h3>
                 </div>
                 <div class='card-content'>{content}</div>
             </div>
