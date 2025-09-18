@@ -119,7 +119,19 @@ def generate_html_report(results, hostname, output_dir="."):
     score = results.get('score_final', 0)
     grade = results.get('note', 'N/A')
 
-    html_content = f"<!DOCTYPE html><html><head><title>Rapport de Sécurité - {hostname}</title></head><body>"
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Rapport de Sécurité - {hostname}</title>
+        <style>
+            .horizontal-list {{ list-style-type: none; padding: 0; display: flex; flex-wrap: wrap; gap: 1em; }}
+            .horizontal-list li {{ background-color: #f0f0f0; padding: 5px 10px; border-radius: 5px; }}
+            .status-SUCCESS {{ color: green; }}
+        </style>
+    </head>
+    <body>
+    """
     html_content += f"<h1>Rapport d'Analyse de Sécurité pour {hostname}</h1>"
     html_content += f"<h2>Score de Dangerosité : {score} (Note: {grade})</h2>"
 
@@ -161,6 +173,14 @@ def generate_html_report(results, hostname, output_dir="."):
                         html_content += f"<li>{cert_subject}</li>"
                     html_content += "</ul></li>"
                 html_content += "</ul>"
+
+        elif category == 'tls_protocols' and isinstance(data, list):
+            html_content += "<ul class='horizontal-list'>"
+            for item in data:
+                status_class = item.get('statut', 'INFO')
+                html_content += f"<li><strong>{item.get('protocole')}:</strong> <span class='status-{status_class}'>{item.get('message')}</span></li>"
+            html_content += "</ul>"
+
         else:
             html_content += f"<pre>{json.dumps(data, indent=2, ensure_ascii=False)}</pre>"
 
