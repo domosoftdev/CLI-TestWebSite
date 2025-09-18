@@ -196,6 +196,8 @@ def generate_html_report(results, hostname, output_dir="."):
         print(f"\n❌ Erreur lors de l'écriture du rapport HTML : {e}")
 
 
+
+
 def print_human_readable_report(results):
     """Prints a human-readable summary of the analysis to the console."""
     STATUS_ICONS = {"SUCCESS": "✅", "ERROR": "❌", "WARNING": "⚠️", "INFO": "ℹ️"}
