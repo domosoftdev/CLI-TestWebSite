@@ -10,15 +10,15 @@ def main():
     output_dir = "debug_outputs"
     results = {
         "score_final": 42, "note": "D", "hostname": hostname,
-        "ssl_certificate": {"statut": "ERROR", "message": "La vérification du certificat a échoué (CERTIFICATE_VERIFY_FAILED).", "criticite": "HIGH"},
+        "ssl_certificate": {"statut": "ERROR", "message": "La vérification du certificat a échoué (CERTIFICATE_VERIFY_FAILED).", "criticite": "HIGH", "remediation_id": "CERT_VERIFY_FAILED"},
         "tls_protocols": [{"protocole": "SSL 2.0", "statut": "SUCCESS", "message": "Non supporté"}, {"protocole": "TLS 1.3", "statut": "SUCCESS", "message": "Supporté"}],
         "http_redirect": {"statut": "SUCCESS", "message": "Redirection correcte vers HTTPS."},
-        "security_headers": {"statut": "ERROR", "message": "En-tête X-Frame-Options manquant.", "criticite": "HIGH"},
-        "cookie_security": [{"statut": "WARNING", "message": "Cookie 'test' sans l'attribut Secure.", "criticite": "MEDIUM"}],
+        "security_headers": {"statut": "ERROR", "message": "En-tête X-Frame-Options manquant.", "criticite": "HIGH", "remediation_id": "XFO_MISSING"},
+        "cookie_security": [{"statut": "WARNING", "message": "Cookie 'test' sans l'attribut Secure.", "criticite": "MEDIUM", "remediation_id": "COOKIE_NO_SECURE"}],
         "cms_footprint_meta": {"statut": "INFO", "message": "Aucun CMS détecté via les métadonnées."},
         "cms_footprint_paths": [],
-        "js_libraries": [{"nom": "jQuery", "version_detectee": "1.12.4", "derniere_version": "3.7.1", "statut": "ERROR", "criticite": "HIGH"}],
-        "dns_records": {"spf": {"statut": "ERROR", "message": "Aucun enregistrement TXT trouvé.", "criticite": "HIGH"}},
+        "js_libraries": [{"nom": "jQuery", "version_detectee": "1.12.4", "derniere_version": "3.7.1", "statut": "ERROR", "criticite": "HIGH", "remediation_id": "JS_LIB_OBSOLETE"}],
+        "dns_records": {"spf": {"statut": "ERROR", "message": "Aucun enregistrement TXT trouvé.", "criticite": "HIGH", "remediation_id": "SPF_MISSING"}},
         "whois_info": {"registrar": "Gandi SAS", "expiration_date": "2025-12-25T00:00:00"},
         "parking_score": {"score": 20}
     }
