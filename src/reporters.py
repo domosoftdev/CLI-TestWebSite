@@ -4,6 +4,7 @@ import json
 import csv
 import copy
 from datetime import datetime
+from .config import REMEDIATION_ADVICE
 
 def generate_json_report(results, hostname, output_dir="."):
     os.makedirs(output_dir, exist_ok=True)
@@ -71,6 +72,7 @@ def generate_html_report(results, hostname, output_dir="."):
             ul {{ list-style-type: square; padding-left: 20px; }}
             .horizontal-list {{ list-style-type: none; padding: 0; display: flex; flex-wrap: wrap; gap: 1em; }}
             .horizontal-list li {{ background-color: #f0f0f0; padding: 5px 10px; border-radius: 5px; }}
+            .remediation-advice {{ background-color: #eef; border-left: 4px solid #007bff; padding: 10px; margin-top: 10px; }}
         </style></head><body>
         <header class="report-header"><div class="header-main"><h1>Rapport d'Analyse de Sécurité pour {hostname}</h1><h2>Score de Dangerosité : {score} (Note: {grade})</h2></div>
             <div class="header-sidebar"><div class='grading-table'><h3>Légende des Notes</h3>
@@ -83,24 +85,50 @@ def generate_html_report(results, hostname, output_dir="."):
         title_map = {"ssl_certificate": "Certificat SSL/TLS", "tls_protocols": "Protocoles TLS", "http_redirect": "Redirection HTTP", "security_headers": "En-têtes de sécurité", "cookie_security": "Sécurité des cookies", "dns_records": "Enregistrements DNS", "whois_info": "Informations Whois", "cms_footprint_meta": "Détection de CMS (Méta)", "cms_footprint_paths": "Détection de CMS (Chemins)", "js_libraries": "Bibliothèques JavaScript", "parking_score": "Score de Parking"}
         title = title_map.get(category, category.replace('_', ' ').title())
         content = f"<div class='report-section'><h3>{title}</h3>"
+
+        def get_remediation_html(item_data):
+            remediation_html = ""
+            remediation_id = item_data.get('remediation_id')
+            if remediation_id and remediation_id in REMEDIATION_ADVICE:
+                advice = REMEDIATION_ADVICE[remediation_id].get('default', 'Aucun conseil disponible.')
+                remediation_html = f"<div class='remediation-advice'><strong>Conseil de remédiation :</strong> {advice}</div>"
+            return remediation_html
+
         if category == 'ssl_certificate' and isinstance(data, dict):
             status_class = data.get('statut', 'INFO')
             content += f"<p class='status-{status_class}'><strong>Statut global :</strong> {data.get('message', 'N/A')}</p>"
+            content += get_remediation_html(data)
             if data.get('points_a_corriger'):
-                content += "<strong>Points à corriger :</strong><ul>"; [content := content + f"<li><strong class='status-{point.get('criticite')}'>[{point.get('criticite')}]</strong>: {point.get('message')}</li>" for point in data['points_a_corriger']]; content += "</ul>"
+                content += "<strong>Points à corriger :</strong><ul>"
+                for point in data['points_a_corriger']:
+                    content += f"<li><strong class='status-{point.get('criticite')}'>[{point.get('criticite')}]</strong>: {point.get('message')}</li>"
+                content += "</ul>"
             if data.get('details'):
                 content += "<strong>Détails techniques :</strong><ul>"; [content := content + f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>" for key, value in data['details'].items()]; content += "</ul>"
         elif category == 'tls_protocols' and isinstance(data, list):
             content += "<ul class='horizontal-list'>"; [content := content + f"<li><strong>{item.get('protocole')}:</strong> <span class='status-{item.get('statut', 'INFO')}'>{item.get('message')}</span></li>" for item in data]; content += "</ul>"
         elif category == 'dns_records' and isinstance(data, dict):
-            content += "<ul>"; [content := content + f"<li><strong>{rt.upper()}:</strong> <span class='status-{rd.get('statut', 'INFO')}'>[{rd.get('criticite', 'N/A')}]</span> {rd.get('message', ', '.join(filter(None, rd.get('valeurs') or [rd.get('valeur')])))}</li>" for rt, rd in data.items()]; content += "</ul>"
+            content += "<ul>"
+            for record_type, record_data in data.items():
+                status_class = record_data.get('statut', 'INFO')
+                valeurs = record_data.get('valeurs') or [record_data.get('valeur')]
+                message = record_data.get('message', ', '.join(filter(None, valeurs)))
+                content += f"<li><strong>{record_type.upper()}:</strong> <span class='status-{status_class}'>[{record_data.get('criticite', 'N/A')}]</span> {message}"
+                content += get_remediation_html(record_data)
+                content += "</li>"
+            content += "</ul>"
         elif category == 'whois_info' and isinstance(data, dict):
             content += "<ul>"; [content := content + f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>" for key, value in data.items() if key not in ['statut', 'criticite']]; content += "</ul>"
         elif isinstance(data, dict) and 'statut' in data:
-            content += f"<p class='status-{data.get('statut', 'INFO')}'><strong>[{data.get('criticite')}]</strong> {data.get('message')}</p>"
+            status_class = data.get('statut', 'INFO')
+            content += f"<p class='status-{status_class}'><strong>[{data.get('criticite')}]</strong> {data.get('message')}</p>"
+            content += get_remediation_html(data)
         elif isinstance(data, list) and data and isinstance(data[0], dict) and 'statut' in data[0]:
-            for item in data: content += f"<p class='status-{item.get('statut', 'INFO')}'><strong>[{item.get('criticite')}]</strong> {item.get('message')}</p>"
-        else: content += f"<pre>{json.dumps(data, indent=2, ensure_ascii=False)}</pre>"
+            for item in data:
+                content += f"<p class='status-{item.get('statut', 'INFO')}'><strong>[{item.get('criticite')}]</strong> {item.get('message')}</p>"
+                content += get_remediation_html(item)
+        else:
+            content += f"<pre>{json.dumps(data, indent=2, ensure_ascii=False)}</pre>"
         content += "</div>"; return content
     main_report_content = ""
     for group_title, group_data in report_structure.items():
