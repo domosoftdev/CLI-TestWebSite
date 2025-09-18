@@ -1,10 +1,10 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from src.analyzers.cookies import CookieAnalyzer
+from cookie_analyzer import CookieAnalyzer
 
 class TestGDPR(unittest.TestCase):
 
-    @patch('src.analyzers.cookies.webdriver.Chrome')
+    @patch('cookie_analyzer.webdriver.Chrome')
     def test_check_consent_banner_found(self, mock_chrome):
         """
         Test that the consent banner is found when present.
@@ -28,7 +28,7 @@ class TestGDPR(unittest.TestCase):
         self.assertTrue(result['consent_banner']['present'])
         self.assertIsNotNone(result['consent_banner']['selector'])
 
-    @patch('src.analyzers.cookies.webdriver.Chrome')
+    @patch('cookie_analyzer.webdriver.Chrome')
     def test_check_consent_banner_not_found(self, mock_chrome):
         """
         Test that the consent banner is not found when absent.
