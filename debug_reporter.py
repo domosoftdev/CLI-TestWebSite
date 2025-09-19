@@ -9,7 +9,7 @@ def main():
     hostname = "debug-test.com"
     output_dir = "debug_outputs"
     results = {
-        "score_final": 42, "note": "D", "hostname": hostname,
+        "score_final": 42, "note": "D", "hostname": hostname, "server": "nginx",
         "ssl_certificate": {"statut": "ERROR", "message": "La vérification du certificat a échoué (CERTIFICATE_VERIFY_FAILED).", "criticite": "HIGH", "remediation_id": "CERT_VERIFY_FAILED"},
         "tls_protocols": [{"protocole": "SSL 2.0", "statut": "SUCCESS", "message": "Non supporté"}, {"protocole": "TLS 1.3", "statut": "SUCCESS", "message": "Supporté"}],
         "http_redirect": {"statut": "SUCCESS", "message": "Redirection correcte vers HTTPS."},
