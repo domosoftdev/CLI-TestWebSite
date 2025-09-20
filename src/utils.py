@@ -1,7 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-This module contains utility functions shared across the application.
-"""
 import socket
 
 def check_host_exists(hostname):
@@ -47,18 +44,16 @@ def print_human_readable_report(results):
             if data.get('details'):
                 print("    - Détails techniques :")
                 details = data['details']
-                detail_items = {
-                    "Expire dans": f"{details.get('jours_restants')} jours",
-                    "Force de la clé": details.get('force_cle_publique'),
-                    "Algorithme de signature": details.get('algorithme_signature'),
-                }
-                for label, value in detail_items.items():
-                    if value: print(f"      - {label} : {value}")
-        elif isinstance(data, list):
+                for key, value in details.items():
+                    print(f"      - {key.replace('_', ' ').title()} : {value}")
+
+        elif isinstance(data, list) and data and isinstance(data[0], dict) and 'statut' in data[0]:
             for item in data:
-                if isinstance(item, dict) and 'statut' in item:
-                    icon = STATUS_ICONS.get(item.get('statut'), '❓')
-                    print(f"  {icon} [{item.get('criticite', 'INFO')}] {item.get('message', 'Détail non disponible.')}")
+                icon = STATUS_ICONS.get(item.get('statut'), '❓')
+                print(f"  {icon} [{item.get('criticite', 'INFO')}] {item.get('message', 'Détail non disponible.')}")
+
         elif isinstance(data, dict) and 'statut' in data:
              icon = STATUS_ICONS.get(data.get('statut'), '❓')
              print(f"  {icon} [{data.get('criticite', 'INFO')}] {data.get('message', 'Détail non disponible.')}")
+
+    print("="*50)

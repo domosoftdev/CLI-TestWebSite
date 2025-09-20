@@ -43,7 +43,7 @@ Accueil - Analyseur de Sécurité Web
                         <tr>
                             <td>{{ report.hostname }}</td>
                             <td>{{ report.date }}</td>
-                            <td><a href="{{ url_for('static', filename=report.path) }}" target="_blank">Voir le Rapport</a></td>
+                            <td><a href="{{ url_for('serve_report', filename=report.path) }}" target="_blank">Voir le Rapport</a></td>
                         </tr>
                     {% endfor %}
                 </tbody>
