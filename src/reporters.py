@@ -4,7 +4,6 @@ import json
 import csv
 import copy
 from datetime import datetime
-from weasyprint import HTML
 from .config import REMEDIATION_ADVICE
 
 def generate_json_report(results, hostname, output_dir="."):
@@ -49,7 +48,7 @@ def generate_csv_report(results, hostname, output_dir="."):
     except IOError as e:
         print(f"\n❌ Erreur lors de l'écriture du rapport CSV : {e}")
 
-def generate_html_report(results, hostname, output_dir=".", return_content=False):
+def generate_html_report(results, hostname, output_dir="."):
     os.makedirs(output_dir, exist_ok=True)
     date_str = datetime.now().strftime('%d%m%y')
     filename = os.path.join(output_dir, f"{hostname}_{date_str}.html")
@@ -194,30 +193,7 @@ def generate_html_report(results, hostname, output_dir=".", return_content=False
     try:
         with open(filename, 'w', encoding='utf-8') as f: f.write(html_content)
         print(f"\n✅ Rapport HTML généré avec succès : {filename}")
-        return html_content  # Retourne le contenu pour le PDF
+        return filename
     except IOError as e:
         print(f"\n❌ Erreur lors de l'écriture du rapport HTML : {e}")
         return None
-
-# Nouvelle fonction pour générer le PDF
-def generate_pdf_report(results, hostname, output_dir="."):
-    """Génère un rapport PDF à partir du contenu HTML existant."""
-    # Génère le contenu HTML (en réutilisant la logique existante)
-    html_content = generate_html_report(results, hostname, output_dir=output_dir, return_content=True)
-    
-    if not html_content:
-        print("❌ Impossible de générer le PDF : le contenu HTML est vide.")
-        return
-
-    # Crée le dossier de sortie si nécessaire
-    import os
-    os.makedirs(output_dir, exist_ok=True)
-    date_str = datetime.now().strftime('%d%m%y')
-    pdf_filename = os.path.join(output_dir, f"{hostname}_{date_str}.pdf")
-
-    # Convertit le HTML en PDF
-    try:
-        HTML(string=html_content).write_pdf(pdf_filename)
-        print(f"✅ Rapport PDF généré : {pdf_filename}")
-    except Exception as e:
-        print(f"❌ Erreur lors de la génération du PDF : {e}")
