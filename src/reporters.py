@@ -193,4 +193,7 @@ def generate_html_report(results, hostname, output_dir="."):
     try:
         with open(filename, 'w', encoding='utf-8') as f: f.write(html_content)
         print(f"\n✅ Rapport HTML généré avec succès : {filename}")
-    except IOError as e: print(f"\n❌ Erreur lors de l'écriture du rapport HTML : {e}")
+        return filename
+    except IOError as e:
+        print(f"\n❌ Erreur lors de l'écriture du rapport HTML : {e}")
+        return None
