@@ -56,10 +56,10 @@ def main():
 
     # If a domain is provided, run a new scan
     if args.domain:
-        # The core scan logic is now in src/scanner.py
-        # This allows it to be called from both the CLI and the web app.
-        from src.scanner import run_full_scan
-        run_full_scan(args.domain, args.scans_dir)
+        print("Lancement de scan depuis la ligne de commande est temporairement désactivé. Veuillez utiliser l'application web.")
+        # The core scan logic has been moved into the web app (app.py)
+        # to handle complexities with multiprocessing.
+        # A future refactoring could make it available to both.
 
     # Handle reporting actions
     elif args.list_scans or args.compare or args.status or args.graph:
