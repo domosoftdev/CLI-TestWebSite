@@ -2,5 +2,4 @@
 example.com
 google.com
 # Ajoutez vos domaines ci-dessous, ex:
-# mon-site.fr
-# api.mon-service.com
+httpbin.org
