@@ -7,3 +7,4 @@ lxml
 python-whois
 matplotlib
 selenium
+Flask

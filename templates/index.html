@@ -1,0 +1,35 @@
+{% extends "layout.html" %}
+
+{% block title %}
+Accueil - Analyseur de Sécurité Web
+{% endblock %}
+
+{% block content %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class=flashes>
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <h1>Bienvenue sur l'Analyseur de Sécurité Web</h1>
+    <p>Cette application vous permettra de lancer des scans de sécurité et de visualiser les résultats.</p>
+
+    <div id="scan-form-container">
+        <h2>Lancer un nouveau scan</h2>
+        <form action="/scan" method="post">
+            <label for="domain">Domaine à analyser :</label>
+            <input type="text" id="domain" name="domain" required placeholder="exemple.com" size="30">
+            <button type="submit">Lancer le Scan</button>
+        </form>
+    </div>
+
+    <div id="results-container">
+        <!-- La liste des rapports existants sera ajoutée ici -->
+        <h2>Rapports Existants</h2>
+        <p>Prochainement...</p>
+    </div>
+{% endblock %}
