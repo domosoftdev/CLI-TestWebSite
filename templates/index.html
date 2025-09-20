@@ -28,8 +28,28 @@ Accueil - Analyseur de Sécurité Web
     </div>
 
     <div id="results-container">
-        <!-- La liste des rapports existants sera ajoutée ici -->
         <h2>Rapports Existants</h2>
-        <p>Prochainement...</p>
+        {% if reports %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Domaine</th>
+                        <th>Date du Scan</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for report in reports %}
+                        <tr>
+                            <td>{{ report.hostname }}</td>
+                            <td>{{ report.date }}</td>
+                            <td><a href="{{ url_for('static', filename=report.path) }}" target="_blank">Voir le Rapport</a></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>Aucun rapport trouvé. Lancez un scan pour commencer.</p>
+        {% endif %}
     </div>
 {% endblock %}

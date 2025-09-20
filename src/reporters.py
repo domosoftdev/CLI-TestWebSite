@@ -4,11 +4,7 @@ import json
 import csv
 import copy
 from datetime import datetime
-from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
+
 from .config import REMEDIATION_ADVICE
 
 def generate_json_report(results, hostname, output_dir="."):
@@ -53,7 +49,7 @@ def generate_csv_report(results, hostname, output_dir="."):
     except IOError as e:
         print(f"\n❌ Erreur lors de l'écriture du rapport CSV : {e}")
 
-def generate_html_report(results, hostname, output_dir=".", return_content=False):
+def generate_html_report(results, hostname, output_dir="."):
     os.makedirs(output_dir, exist_ok=True)
     date_str = datetime.now().strftime('%d%m%y')
     filename = os.path.join(output_dir, f"{hostname}_{date_str}.html")
@@ -198,66 +194,8 @@ def generate_html_report(results, hostname, output_dir=".", return_content=False
     try:
         with open(filename, 'w', encoding='utf-8') as f: f.write(html_content)
         print(f"\n✅ Rapport HTML généré avec succès : {filename}")
-        return html_content
+
+        return filename
     except IOError as e:
         print(f"\n❌ Erreur lors de l'écriture du rapport HTML : {e}")
         return None
-
-def generate_pdf_report(results, hostname, output_dir="."):
-    """Génère un rapport PDF avec ReportLab à partir des résultats."""
-    os.makedirs(output_dir, exist_ok=True)
-    date_str = datetime.now().strftime('%d%m%y')
-    pdf_filename = os.path.join(output_dir, f"{hostname}_{date_str}.pdf")
-    
-    # Crée un document PDF
-    doc = SimpleDocTemplate(pdf_filename, pagesize=letter)
-    styles = getSampleStyleSheet()
-    story = []
-    
-    # Titre principal
-    story.append(Paragraph(f"Rapport de Sécurité pour {hostname}", styles["Title"]))
-    story.append(Spacer(1, 0.25*inch))
-    
-    # Score global
-    score = results.get('score_final', 'N/A')
-    grade = results.get('note', 'N/A')
-    story.append(Paragraph(f"Score de sécurité : {score} (Note : {grade})", styles["Heading2"]))
-    story.append(Spacer(1, 0.2*inch))
-    
-    # Styles personnalisés pour les statuts
-    status_styles = {
-        "ERROR": ParagraphStyle(name="Error", textColor=colors.red, fontSize=10, spaceAfter=6),
-        "WARNING": ParagraphStyle(name="Warning", textColor=colors.orange, fontSize=10, spaceAfter=6),
-        "SUCCESS": ParagraphStyle(name="Success", textColor=colors.green, fontSize=10, spaceAfter=6),
-        "INFO": ParagraphStyle(name="Info", textColor=colors.blue, fontSize=10, spaceAfter=6),
-    }
-    
-    # Sections du rapport
-    def add_section(title, data):
-        story.append(Paragraph(title, styles["Heading3"]))
-        if isinstance(data, dict):
-            if 'statut' in data:
-                status = data.get('statut', 'INFO')
-                story.append(Paragraph(f"Statut : {data.get('message', 'N/A')}", status_styles.get(status, styles["Normal"])))
-            if 'points_a_corriger' in data:
-                story.append(Paragraph("Points à corriger :", styles["Heading4"]))
-                for point in data['points_a_corriger']:
-                    story.append(Paragraph(f"- {point.get('message')}", status_styles.get(point.get('statut'), styles["Normal"])))
-        elif isinstance(data, list):
-            for item in data:
-                if isinstance(item, dict) and 'statut' in item:
-                    story.append(Paragraph(f"- {item.get('message')}", status_styles.get(item.get('statut'), styles["Normal"])))
-    
-    # Ajoute les sections principales
-    if 'ssl_certificate' in results:
-        add_section("Certificat SSL/TLS", results['ssl_certificate'])
-    if 'tls_protocols' in results:
-        add_section("Protocoles TLS", results['tls_protocols'])
-    if 'security_headers' in results:
-        add_section("En-têtes de Sécurité", results['security_headers'])
-    if 'dns_records' in results:
-        add_section("Enregistrements DNS", results['dns_records'])
-    
-    # Génère le PDF
-    doc.build(story)
-    print(f"✅ Rapport PDF généré : {pdf_filename}")

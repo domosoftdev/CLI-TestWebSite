@@ -26,7 +26,7 @@ from src.analyzers.security import SecurityAnalyzer
 from src.core.consolidator import Consolidator
 from src.config import REMEDIATION_ADVICE
 
-from src.reporters import generate_json_report, generate_csv_report, generate_html_report, generate_pdf_report
+from src.reporters import generate_json_report, generate_csv_report, generate_html_report
 
 # --- Utility Functions ---
 
@@ -119,7 +119,7 @@ def main():
 
     # Primary action: running a new scan
     parser.add_argument("--domain", help="Le nom de domaine du site web à analyser (ex: google.com).")
-    parser.add_argument("--formats", type=str, default="", help="Génère des rapports dans les formats spécifiés, séparés par des virgules (ex: json,html,csv,pdf).")
+    parser.add_argument("--formats", type=str, default="", help="Génère des rapports dans les formats spécifiés, séparés par des virgules (ex: json,html,csv).")
     parser.add_argument("--scans-dir", default="scans", help="Le répertoire pour lire et sauvegarder les rapports de scan.")
     parser.add_argument("--gdpr", action="store_true", help="Inclut une analyse de conformité RGPD (expérimental).")
     parser.add_argument("-v", "--verbose", action="store_true", help="Affiche des informations détaillées pendant l'exécution.")
@@ -135,6 +135,7 @@ def main():
 
     # If a domain is provided, run a new scan
     if args.domain:
+
         hostname = get_hostname(args.domain)
         if not check_host_exists(hostname):
             print(f"Erreur : L'hôte '{hostname}' est introuvable.", file=sys.stderr)
@@ -152,8 +153,6 @@ def main():
             generate_csv_report(results, hostname, args.scans_dir)
         if 'html' in formats:
             generate_html_report(results, hostname, args.scans_dir)
-        if 'pdf' in formats:
-            generate_pdf_report(results, hostname, args.scans_dir)  # Utilise maintenant ReportLab
 
     # Handle reporting actions
     elif args.list_scans or args.compare or args.status or args.graph:
