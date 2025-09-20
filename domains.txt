@@ -1,3 +1,0 @@
-# Liste des domaines à scanner automatiquement (un par ligne)
-example.com
-google.com
