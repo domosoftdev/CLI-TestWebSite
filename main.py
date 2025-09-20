@@ -153,7 +153,7 @@ def main():
         if 'html' in formats:
             generate_html_report(results, hostname, args.scans_dir)
         if 'pdf' in formats:
-            generate_pdf_report(results, hostname, args.scans_dir)  # Nouvelle ligne pour le PDF
+            generate_pdf_report(results, hostname, args.scans_dir)  # Utilise maintenant ReportLab
 
     # Handle reporting actions
     elif args.list_scans or args.compare or args.status or args.graph:
