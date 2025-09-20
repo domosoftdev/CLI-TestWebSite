@@ -8,4 +8,4 @@ python-whois
 matplotlib
 selenium
 Flask
-weasyprint>=54.0
+reportlab>=4.0.0
