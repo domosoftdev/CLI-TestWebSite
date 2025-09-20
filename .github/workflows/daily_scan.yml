@@ -27,8 +27,8 @@ jobs:
         run: |
           # Lire la liste des domaines depuis domains.txt (un domaine par ligne)
           while IFS= read -r domain || [[ -n "$domain" ]]; do
-            # Ignorer les lignes vides ou les commentaires (commencent par #)
-            if [[ -z "$domain" || "$domain" == \"#"* ]]; then
+            # Ignorer les lignes vides et les commentaires (commencent par #)
+            if [[ -z "$domain" || "$domain" == \#* ]]; then
               continue
             fi
             echo "Scanning domain: $domain"
