@@ -27,7 +27,86 @@ from src.core.consolidator import Consolidator
 from src.config import REMEDIATION_ADVICE
 
 from src.reporters import generate_json_report, generate_csv_report, generate_html_report
-from src.utils import get_hostname, check_host_exists, print_human_readable_report
+
+# --- Utility Functions ---
+
+def check_host_exists(hostname):
+    """Checks if a hostname can be resolved."""
+    import socket
+    try:
+        socket.gethostbyname_ex(hostname)
+        return True
+    except socket.gaierror:
+        return False
+
+def get_hostname(url):
+    """Extracts the hostname from a URL."""
+    if url.startswith('https://'): url = url[8:]
+    if url.startswith('http://'): url = url[7:]
+    if '/' in url: url = url.split('/')[0]
+    return url
+
+def print_human_readable_report(results):
+    """Prints a human-readable summary of the analysis to the console."""
+    STATUS_ICONS = {"SUCCESS": "✅", "ERROR": "❌", "WARNING": "⚠️", "INFO": "ℹ️"}
+    score = results.get('score_final', 'N/A')
+    grade = results.get('note', 'N/A')
+    hostname = results.get('hostname', 'N/A')
+
+    print("\n" + "="*50)
+    print(f" RAPPORT D'ANALYSE DE SÉCURITÉ POUR : {hostname}")
+    print(f" SCORE DE DANGEROSITÉ : {score} (Note : {grade})")
+    print("="*50)
+
+    # Simplified printing logic
+    for category, data in results.items():
+        if category in ['hostname', 'score_final', 'note']:
+            continue
+        print(f"\n--- {category.replace('_', ' ').title()} ---")
+
+        # Special handling for SSL Certificate to show details
+        if category == 'ssl_certificate' and isinstance(data, dict):
+            # Main status
+            icon = STATUS_ICONS.get(data.get('statut'), '❓')
+            print(f"  {icon} [{data.get('criticite', 'INFO')}] {data.get('message')}")
+
+            # Points to correct
+            if data.get('points_a_corriger'):
+                print("    - Points à corriger :")
+                for point in data['points_a_corriger']:
+                    icon = STATUS_ICONS.get(point.get('statut', '❓'), '❓')
+                    print(f"      {icon} [{point.get('criticite')}] {point.get('message')}")
+
+            # Details section
+            if data.get('details'):
+                print("    - Détails techniques :")
+                details = data['details']
+                detail_items = {
+                    "Expire dans": f"{details.get('jours_restants')} jours",
+                    "Force de la clé": details.get('force_cle_publique'),
+                    "Algorithme de signature": details.get('algorithme_signature'),
+                }
+                for label, value in detail_items.items():
+                    if value: print(f"      - {label} : {value}")
+
+                if 'noms_alternatifs_sujet (SAN)' in details:
+                    print("      - Noms alternatifs (SAN) :")
+                    for name in details['noms_alternatifs_sujet (SAN)']:
+                        print(f"        - {name}")
+
+                if 'chaine_de_certificats' in details:
+                    print("      - Chaîne de confiance :")
+                    for i, cert_subject in enumerate(details['chaine_de_certificats']):
+                        print(f"        {i}: {cert_subject}")
+
+        elif isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict) and 'statut' in item:
+                    icon = STATUS_ICONS.get(item.get('statut'), '❓')
+                    print(f"  {icon} [{item.get('criticite', 'INFO')}] {item.get('message', 'Détail non disponible.')}")
+        elif isinstance(data, dict) and 'statut' in data:
+             icon = STATUS_ICONS.get(data.get('statut'), '❓')
+             print(f"  {icon} [{data.get('criticite', 'INFO')}] {data.get('message', 'Détail non disponible.')}")
 
 
 # --- Main Application Logic ---
@@ -56,10 +135,23 @@ def main():
 
     # If a domain is provided, run a new scan
     if args.domain:
-        # The core scan logic is now in src/scanner.py
-        # This allows it to be called from both the CLI and the web app.
-        from src.scanner import run_full_scan
-        run_full_scan(args.domain, args.scans_dir)
+        hostname = get_hostname(args.domain)
+        if not check_host_exists(hostname):
+            print(f"Erreur : L'hôte '{hostname}' est introuvable.", file=sys.stderr)
+            sys.exit(1)
+
+        analyzer = SecurityAnalyzer(verbose=args.verbose)
+        results = analyzer.analyze(hostname, perform_gdpr_check=args.gdpr)
+
+        print_human_readable_report(results)
+
+        formats = [f.strip() for f in args.formats.lower().split(',') if f.strip()]
+        if 'json' in formats:
+            generate_json_report(results, hostname, args.scans_dir)
+        if 'csv' in formats:
+            generate_csv_report(results, hostname, args.scans_dir)
+        if 'html' in formats:
+            generate_html_report(results, hostname, args.scans_dir)
 
     # Handle reporting actions
     elif args.list_scans or args.compare or args.status or args.graph:
