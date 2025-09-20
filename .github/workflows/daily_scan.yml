@@ -1,0 +1,43 @@
+name: Daily Security Scan
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Tous les jours à minuit (UTC)
+  workflow_dispatch:      # Permet de déclencher manuellement depuis l'interface GitHub
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create scans directory
+        run: mkdir -p scans
+
+      - name: Run security scan
+        run: |
+          # Lire la liste des domaines depuis domains.txt (un domaine par ligne)
+          while IFS= read -r domain || [[ -n "$domain" ]]; do
+            # Ignorer les lignes vides et les commentaires (commencent par #)
+            if [[ -z "$domain" || "$domain" == \#* ]]; then
+              continue
+            fi
+            echo "Scanning domain: $domain"
+            python main.py --domain "$domain" --formats json,html --scans-dir scans
+          done < domains.txt
+
+      - name: Upload reports as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports-${{ github.run_id }}
+          path: scans/
+          retention-days: 7

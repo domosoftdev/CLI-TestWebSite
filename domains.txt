@@ -1,0 +1,6 @@
+# Liste des domaines à scanner automatiquement (un par ligne)
+example.com
+google.com
+# Ajoutez vos domaines ci-dessous, ex:
+# mon-site.fr
+# api.mon-service.com
