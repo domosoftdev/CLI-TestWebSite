@@ -135,7 +135,7 @@ def main():
 
     # If a domain is provided, run a new scan
     if args.domain:
-<<<<<<< HEAD
+
         hostname = get_hostname(args.domain)
         if not check_host_exists(hostname):
             print(f"Erreur : L'hôte '{hostname}' est introuvable.", file=sys.stderr)
@@ -153,12 +153,6 @@ def main():
             generate_csv_report(results, hostname, args.scans_dir)
         if 'html' in formats:
             generate_html_report(results, hostname, args.scans_dir)
-=======
-        print("Lancement de scan depuis la ligne de commande est temporairement désactivé. Veuillez utiliser l'application web.")
-        # The core scan logic has been moved into the web app (app.py)
-        # to handle complexities with multiprocessing.
-        # A future refactoring could make it available to both.
->>>>>>> 8ccbec1a6039923c3f72a9aa3ba9bf47c1182bbd
 
     # Handle reporting actions
     elif args.list_scans or args.compare or args.status or args.graph:
