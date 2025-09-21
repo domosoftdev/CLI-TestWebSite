@@ -77,11 +77,6 @@ def generate_html_report(results, hostname, output_dir="."):
             .grading-table th, .grading-table td {{ border: none; border-bottom: 1px solid #eee; }}
             .grading-table h3 {{ margin-top: 0; border-bottom: 2px solid #007bff; padding-bottom: 5px;}}
             .report-group {{ border: 1px solid #d1d9e6; padding: 20px; margin-bottom: 25px; border-radius: 8px; background-color: #ffffff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }}
-            .report-group > h2 {{ cursor: pointer; user-select: none; }}
-            .report-group > h2::after {{ content: ' ▼'; font-size: 0.8em; }}
-            .report-group.collapsed > h2::after {{ content: ' ▶'; }}
-            .group-content {{ display: block; transition: max-height 0.5s ease-out; overflow: hidden; max-height: 10000px; /* High value to animate from */ }}
-            .report-group.collapsed .group-content {{ max-height: 0; }}
             .report-section {{ border: none; border-top: 1px solid #eee; padding-top: 15px; margin-top: 15px;}}
             .report-group .report-section:first-of-type {{ border-top: none; margin-top: 0; }}
             .group-description {{ font-style: italic; color: #555; margin-bottom: 20px; }}
@@ -167,7 +162,7 @@ def generate_html_report(results, hostname, output_dir="."):
         content += "</div>"; return content
     main_report_content = ""
     for group_title, group_data in report_structure.items():
-        main_report_content += f"<div class='report-group'><h2>{group_title}</h2><div class='group-content'><p class='group-description'>{group_data['description']}</p>"
+        main_report_content += f"<div class='report-group'><h2>{group_title}</h2><p class='group-description'>{group_data['description']}</p><div class='group-content'>"
         for category in group_data['categories']:
             if category in results: main_report_content += render_category(category, results[category]); rendered_categories.add(category)
         main_report_content += "</div></div>"
@@ -178,8 +173,7 @@ def generate_html_report(results, hostname, output_dir="."):
     html_content += main_report_content + '''
         <script>
             document.addEventListener('DOMContentLoaded', function() {
-                const headers = document.querySelectorAll('.report-group > h2');
-                headers.forEach(header => {
+                document.querySelectorAll('.report-group > h2').forEach(header => {
                     header.addEventListener('click', () => {
                         header.parentElement.classList.toggle('collapsed');
                     });
