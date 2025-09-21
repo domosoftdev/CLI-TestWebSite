@@ -10,7 +10,9 @@ def main():
     """
     parser = argparse.ArgumentParser(description="Analyseur de sécurité de site web et outil de reporting.")
     parser.add_argument("--domain", help="Le nom de domaine du site web à analyser (ex: google.com).")
+    parser.add_argument("--formats", type=str, default="html,json,csv", help="Formats de rapport, séparés par des virgules (défaut: html,json,csv).")
     parser.add_argument("--scans-dir", default="scans", help="Le répertoire pour lire et sauvegarder les rapports de scan.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Affiche des informations détaillées pendant l'exécution.")
 
     reporting_group = parser.add_argument_group('Reporting', 'Actions pour analyser les scans existants')
     reporting_group.add_argument("--list-scans", metavar="DOMAIN", help="Liste tous les scans disponibles pour un domaine.")
@@ -21,7 +23,7 @@ def main():
     args = parser.parse_args()
 
     if args.domain:
-        run_full_scan(args.domain, args.scans_dir)
+        run_full_scan(args.domain, args.scans_dir, args.verbose, args.formats)
     elif args.list_scans or args.compare or args.status or args.graph:
         consolidator = Consolidator(scans_dir=args.scans_dir, verbose=False)
         if not consolidator.all_scans:
