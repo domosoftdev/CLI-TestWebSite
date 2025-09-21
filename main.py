@@ -10,7 +10,6 @@ def main():
     """
     parser = argparse.ArgumentParser(description="Analyseur de sécurité de site web et outil de reporting.")
     parser.add_argument("--domain", help="Le nom de domaine du site web à analyser (ex: google.com).")
-    parser.add_argument("--formats", type=str, default="html,json,csv", help="Formats de rapport (par défaut: html,json,csv).")
     parser.add_argument("--scans-dir", default="scans", help="Le répertoire pour lire et sauvegarder les rapports de scan.")
 
     reporting_group = parser.add_argument_group('Reporting', 'Actions pour analyser les scans existants')
