@@ -56,9 +56,9 @@ def generate_html_report(results, hostname, output_dir="."):
     grade = results.get('note', 'N/A')
 
     def get_gauge_class(score):
-        if score >= 80: return "good"
-        if score >= 60: return "medium"
-        return "bad"
+        if score >= 80: return "good"      # Grades A, B
+        if score >= 70: return "medium"    # Grade C
+        return "bad"                       # Grades D, F
     gauge_class = get_gauge_class(score)
 
     report_structure = {
