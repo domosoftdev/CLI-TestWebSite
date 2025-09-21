@@ -54,20 +54,34 @@ def generate_html_report(results, hostname, output_dir="."):
     filename = os.path.join(output_dir, f"{hostname}_{date_str}.html")
     score = results.get('score_final', 0)
     grade = results.get('note', 'N/A')
+
+    def get_gauge_class(score):
+        if score >= 80: return "good"
+        if score >= 60: return "medium"
+        return "bad"
+    gauge_class = get_gauge_class(score)
+
     report_structure = {
         "1. Configuration du protocole et du transport": {"description": "Cette section vérifie la sécurité de la couche réseau et du chiffrement. 📌 Objectif : garantir que la communication est sécurisée et que les protections de base sont en place.", "categories": ["ssl_certificate", "tls_protocols", "http_redirect", "security_headers", "cookie_security"]},
         "🧠 2. Empreinte applicative et exposition CMS": {"description": "Cette section analyse les traces laissées par les technologies côté serveur. 📌 Objectif : identifier les technologies exposées et les risques liés à des versions vulnérables.", "categories": ["cms_footprint_meta", "cms_footprint_paths", "js_libraries"]},
         "🌐 3. Infrastructure DNS et identité du domaine": {"description": "Cette section couvre la configuration DNS et les informations WHOIS. 📌 Objectif : vérifier la légitimité du domaine, la protection contre l’usurpation, et la configuration des serveurs.", "categories": ["dns_records", "whois_info"]},
         "📈 4. Score et indicateurs complémentaires": {"description": "Cette section regroupe les métriques globales ou spécifiques. 📌 Objectif : fournir une synthèse ou un indicateur complémentaire.", "categories": ["parking_score"]}
     }
+
     html_content = f'''<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Rapport de Sécurité - {hostname}</title><style>
             body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 2em; background-color: #f4f6f9; color: #333; }}
             h1, h2, h3 {{ color: #2c3e50; }}
             .report-header {{ display: flex; align-items: center; gap: 2em; border-bottom: 2px solid #e0e0e0; padding-bottom: 1em; margin-bottom: 2em; }}
-            .header-main {{ flex: 3; }} .header-sidebar {{ flex: 1; }} .grading-table table {{ font-size: 0.9em; width: 100%; border: none; }}
+            .header-main {{ flex: 3; }} .header-sidebar {{ flex: 1; }}
+            .grading-table table {{ font-size: 0.9em; width: 100%; border: none; }}
             .grading-table th, .grading-table td {{ border: none; border-bottom: 1px solid #eee; }}
             .grading-table h3 {{ margin-top: 0; border-bottom: 2px solid #007bff; padding-bottom: 5px;}}
             .report-group {{ border: 1px solid #d1d9e6; padding: 20px; margin-bottom: 25px; border-radius: 8px; background-color: #ffffff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }}
+            .report-group > h2 {{ cursor: pointer; user-select: none; }}
+            .report-group > h2::after {{ content: ' ▼'; font-size: 0.8em; }}
+            .report-group.collapsed > h2::after {{ content: ' ▶'; }}
+            .group-content {{ display: block; transition: max-height 0.5s ease-out; overflow: hidden; max-height: 10000px; /* High value to animate from */ }}
+            .report-group.collapsed .group-content {{ max-height: 0; }}
             .report-section {{ border: none; border-top: 1px solid #eee; padding-top: 15px; margin-top: 15px;}}
             .report-group .report-section:first-of-type {{ border-top: none; margin-top: 0; }}
             .group-description {{ font-style: italic; color: #555; margin-bottom: 20px; }}
@@ -79,13 +93,29 @@ def generate_html_report(results, hostname, output_dir="."):
             .horizontal-list {{ list-style-type: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5em; }}
             .horizontal-list li {{ background-color: #e9ecef; padding: 5px 10px; border-radius: 15px; font-size: 0.9em; }}
             .remediation-advice {{ background-color: #fdf9e2; border-left: 4px solid #f1c40f; padding: 10px; margin-top: 10px; font-size: 0.95em; }}
+            .gauge-container {{ width: 200px; height: 100px; position: relative; overflow: hidden; border-radius: 100px 100px 0 0; background-color: #e9ecef; display: flex; align-items: flex-end; justify-content: center; margin-top: 1em;}}
+            .gauge-fill {{ width: 100%; height: 100%; position: absolute; top: 100%; left: 0; background-color: var(--fill-color, #c0392b); transform-origin: center top; transform: rotate(calc(1.8deg * var(--score, 0))); transition: transform 0.5s ease-in-out; }}
+            .gauge-cover {{ width: 160px; height: 80px; background-color: #f4f6f9; border-radius: 100px 100px 0 0; position: relative; z-index: 1; }}
+            .gauge-text {{ position: absolute; bottom: 5px; z-index: 3; font-size: 2.5em; font-weight: bold; color: #2c3e50; }}
+            .gauge-tick {{ position: absolute; width: 2px; height: 10px; background-color: #95a5a6; top: 100%; left: 50%; transform-origin: center top; z-index: 2; }}
+            .tick-25 {{ transform: translateX(-1px) rotate(45deg); }} .tick-50 {{ transform: translateX(-1px) rotate(90deg); height: 15px; }} .tick-75 {{ transform: translateX(-1px) rotate(135deg); }}
+            .good {{ --fill-color: #27ae60; }} .medium {{ --fill-color: #f39c12; }} .bad {{ --fill-color: #c0392b; }}
         </style></head><body>
-        <header class="report-header"><div class="header-main"><h1>Rapport d'Analyse de Sécurité pour {hostname}</h1><h2>Score de Dangerosité : {score} (Note: {grade})</h2></div>
+        <header class="report-header"><div class="header-main"><h1>Rapport d'Analyse de Sécurité pour {hostname}</h1>
+                <div class="gauge-container {gauge_class}">
+                    <div class="gauge-tick tick-25"></div><div class="gauge-tick tick-50"></div><div class="gauge-tick tick-75"></div>
+                    <div class="gauge-fill" style="--score: {score};"></div>
+                    <div class="gauge-cover"></div>
+                    <div class="gauge-text">{score}</div>
+                </div>
+            </div>
             <div class="header-sidebar"><div class='grading-table'><h3>Légende des Notes</h3>
                 <table><tr><th>Note</th><th>Score</th><th>Niveau</th></tr>
                     <tr><td>A</td><td>90-100</td><td style="color:green;">Excellent</td></tr><tr><td>B</td><td>80-89</td><td style="color:blue;">Bon</td></tr>
                     <tr><td>C</td><td>70-79</td><td style="color:orange;">Moyen</td></tr><tr><td>D</td><td>60-69</td><td style="color:darkorange;">Passable</td></tr>
-                    <tr><td>F</td><td>0-59</td><td style="color:red;">Insuffisant</td></tr></table></div></div></header>'''
+                    <tr><td>F</td><td>0-59</td><td style="color:red;">Insuffisant</td></tr></table>
+                    <p style="text-align:center; font-size: 1.2em; margin-top: 1em;">Note Globale : <strong>{grade}</strong></p>
+                    </div></div></header>'''
     rendered_categories = set()
     def render_category(category, data):
         title_map = {"ssl_certificate": "Certificat SSL/TLS", "tls_protocols": "Protocoles TLS", "http_redirect": "Redirection HTTP", "security_headers": "En-têtes de sécurité", "cookie_security": "Sécurité des cookies", "dns_records": "Enregistrements DNS", "whois_info": "Informations Whois", "cms_footprint_meta": "Détection de CMS (Méta)", "cms_footprint_paths": "Détection de CMS (Chemins)", "js_libraries": "Bibliothèques JavaScript", "parking_score": "Score de Parking"}
@@ -137,15 +167,26 @@ def generate_html_report(results, hostname, output_dir="."):
         content += "</div>"; return content
     main_report_content = ""
     for group_title, group_data in report_structure.items():
-        main_report_content += f"<div class='report-group'><h2>{group_title}</h2><p class='group-description'>{group_data['description']}</p>"
+        main_report_content += f"<div class='report-group'><h2>{group_title}</h2><div class='group-content'><p class='group-description'>{group_data['description']}</p>"
         for category in group_data['categories']:
             if category in results: main_report_content += render_category(category, results[category]); rendered_categories.add(category)
-        main_report_content += "</div>"
+        main_report_content += "</div></div>"
     other_categories_content = ""
     for category, data in results.items():
         if category not in rendered_categories and category not in ['hostname', 'score_final', 'note']: other_categories_content += render_category(category, data)
-    if other_categories_content: main_report_content += f"<div class='report-group'><h2>Autres Analyses</h2>{other_categories_content}</div>"
-    html_content += main_report_content + "</body></html>"
+    if other_categories_content: main_report_content += f"<div class='report-group'><h2>Autres Analyses</h2><div class='group-content'>{other_categories_content}</div></div>"
+    html_content += main_report_content + '''
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const headers = document.querySelectorAll('.report-group > h2');
+                headers.forEach(header => {
+                    header.addEventListener('click', () => {
+                        header.parentElement.classList.toggle('collapsed');
+                    });
+                });
+            });
+        </script>
+    </body></html>'''
     try:
         with open(filename, 'w', encoding='utf-8') as f: f.write(html_content)
         print(f"\n✅ Rapport HTML généré avec succès : {filename}")

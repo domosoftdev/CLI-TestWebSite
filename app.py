@@ -15,16 +15,30 @@ def index():
         for filename in os.listdir(reports_dir):
             if filename.endswith('.html'):
                 try:
-                    parts = filename.replace('.html', '').split('_')
-                    hostname = parts[0]
-                    date_str = parts[1]
-                    display_date = f"{date_str[0:2]}/{date_str[2:4]}/20{date_str[4:6]}"
-                    reports.append({
-                        "hostname": hostname,
-                        "date": display_date,
-                        "path": filename
-                    })
-                except IndexError:
+                    # A more robust way to parse filenames like "hostname_DDMMYY.html"
+                    # or "hostname-with-dashes_DDMMYY.html"
+                    base_name = filename.replace('.html', '')
+
+                    # Find the last underscore, assuming it separates name from date
+                    last_underscore_index = base_name.rfind('_')
+                    if last_underscore_index == -1:
+                        continue # Skip files without an underscore
+
+                    hostname = base_name[:last_underscore_index]
+                    date_str = base_name[last_underscore_index+1:]
+
+                    # Validate date part
+                    if len(date_str) == 6 and date_str.isdigit():
+                        display_date = f"{date_str[0:2]}/{date_str[2:4]}/20{date_str[4:6]}"
+                        # Final check to ensure the parsed date is valid before adding
+                        datetime.strptime(display_date, '%d/%m/%Y')
+                        reports.append({
+                            "hostname": hostname,
+                            "date": display_date,
+                            "path": filename
+                        })
+                except (IndexError, ValueError):
+                    # Catch any parsing or strptime errors for malformed filenames
                     continue
     reports.sort(key=lambda r: datetime.strptime(r['date'], '%d/%m/%Y'), reverse=True)
     return render_template('index.html', reports=reports)
