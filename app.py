@@ -10,7 +10,7 @@ app.config['SECRET_KEY'] = os.urandom(24)
 @app.route('/')
 def index():
     reports = []
-    reports_dir = 'scans' # We will now list from the main scans directory
+    reports_dir = 'scans'
     if os.path.exists(reports_dir):
         for filename in os.listdir(reports_dir):
             if filename.endswith('.html'):
@@ -19,7 +19,6 @@ def index():
                     hostname = parts[0]
                     date_str = parts[1]
                     display_date = f"{date_str[0:2]}/{date_str[2:4]}/20{date_str[4:6]}"
-                    # The link will be to a new route that serves the file
                     reports.append({
                         "hostname": hostname,
                         "date": display_date,
@@ -37,8 +36,12 @@ def scan():
         flash("Le nom de domaine est requis.", "error")
         return redirect(url_for('index'))
 
-    # Temporarily disabling direct scan from web UI due to instability.
-    flash(f"Pour l'instant, veuillez lancer le scan pour '{domain}' manuellement depuis la ligne de commande : python main.py --domain {domain} --formats html,json,csv", "info")
+    # Use subprocess.Popen to run the CLI script in the background
+    command = [sys.executable, 'main.py', '--domain', domain]
+    print(f"--- Lancement de la commande : {' '.join(command)} ---")
+    subprocess.Popen(command)
+
+    flash(f"Le scan pour '{domain}' a été lancé en arrière-plan. La page sera rafraîchie dans quelques instants pour afficher le nouveau rapport.", "success")
     return redirect(url_for('index'))
 
 @app.route('/reports/<path:filename>')

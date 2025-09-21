@@ -16,8 +16,6 @@ def run_full_scan(domain, scans_dir="scans"):
         return
 
     try:
-        # For CLI, verbose can be true, but for web app, it should be false.
-        # This can be made a parameter later.
         analyzer = SecurityAnalyzer(verbose=False)
         results = analyzer.analyze(hostname, perform_gdpr_check=True)
 
@@ -32,8 +30,6 @@ def run_full_scan(domain, scans_dir="scans"):
         print(f"❌ Une erreur majeure est survenue durant le scan de {hostname}: {e}", file=sys.stderr)
 
 if __name__ == '__main__':
-    # This allows running the scanner directly for debugging
-    # e.g., python -m src.scanner example.com
     if len(sys.argv) > 1:
         domain_to_scan = sys.argv[1]
         run_full_scan(domain_to_scan)
