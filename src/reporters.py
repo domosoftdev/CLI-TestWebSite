@@ -134,7 +134,8 @@ def generate_html_report(results, hostname, output_dir="."):
             content += get_remediation_html(data)
             if data.get('points_a_corriger'):
                 content += "<strong>Points à corriger :</strong><ul>"
-                for point in data['points_a_corriger']: content += f"<li><strong class='status-text status-{point.get('criticite')}'>[{point.get('criticite')}]</strong>: {point.get('message')}</li>"
+                for point in data['points_a_corriger']:
+                    content += f"<li><strong class='status-text status-{point.get('criticite')}'>[{point.get('criticite')}]</strong>: {point.get('message')}{get_remediation_html(point)}</li>"
                 content += "</ul>"
             if data.get('details'):
                 content += "<strong>Détails techniques :</strong><ul>"
