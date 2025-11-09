@@ -50,7 +50,8 @@ REMEDIATION_ADVICE = {
     "JS_LIB_OBSOLETE": {"default": "Une ou plusieurs bibliothèques JavaScript sont obsolètes. Mettez-les à jour vers leur dernière version stable pour corriger les vulnérabilités connues."},
     "WP_CONFIG_BAK_EXPOSED": {"default": "Supprimez immédiatement le fichier de sauvegarde de configuration WordPress exposé publiquement."},
     "WP_USER_ENUM_ENABLED": {"default": "Empêchez l'énumération des utilisateurs sur WordPress, par exemple en utilisant un plugin de sécurité ou en ajoutant des règles de réécriture."},
-    "SSL_CHAIN_INCOMPLETE": {"default": "La chaîne de certificats SSL est incomplète. Configurez votre serveur pour qu'il envoie tous les certificats intermédiaires nécessaires afin de garantir la confiance sur tous les appareils."}
+    "SSL_CHAIN_INCOMPLETE": {"default": "La chaîne de certificats SSL est incomplète. Configurez votre serveur pour qu'il envoie tous les certificats intermédiaires nécessaires afin de garantir la confiance sur tous les appareils."},
+    "SSL_CHAIN_UNTRUSTED": {"default": "La chaîne de certificats n'est pas approuvée. Cela peut être dû à un certificat auto-signé ou à une autorité de certification racine non reconnue. Utilisez un certificat émis par une autorité de certification de confiance."}
 }
 
 # --- Consolidator Tool Configuration ---
