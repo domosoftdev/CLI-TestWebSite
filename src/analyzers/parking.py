@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 import dns.resolver
 import uuid
 import whois
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from src.config import (
     KEYWORDS_FOR_SALE,
@@ -193,13 +193,19 @@ def analyze_contextual(domain: str, verbose: bool = False) -> int:
     elif verbose:
         print("  [-] Pas de protection de confidentialité détectée.")
 
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     updated_date = data.get('updated_date')
     if isinstance(updated_date, list):
         updated_date = updated_date[0]
     creation_date = data.get('creation_date')
     if isinstance(creation_date, list):
         creation_date = creation_date[0]
+
+    # Ensure dates are timezone-aware before comparison
+    if updated_date and updated_date.tzinfo is None:
+        updated_date = updated_date.replace(tzinfo=timezone.utc)
+    if creation_date and creation_date.tzinfo is None:
+        creation_date = creation_date.replace(tzinfo=timezone.utc)
 
     if updated_date and (now - updated_date) < timedelta(days=30):
         if verbose:

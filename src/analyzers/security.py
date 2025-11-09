@@ -11,7 +11,7 @@ import requests
 import re
 import whois
 import dns.resolver
-from datetime import datetime
+from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 from packaging import version
 from sslyze import (
@@ -165,7 +165,7 @@ class SecurityAnalyzer:
                         points_a_corriger.append({"message": f"La chaîne de certificats n'est pas fiable: {error_str}", "criticite": "HIGH"})
 
                 # 2. Temporal Validity
-                jours_restants = (leaf_cert.not_valid_after - datetime.now(leaf_cert.not_valid_after.tzinfo)).days
+                jours_restants = (leaf_cert.not_valid_after_utc - datetime.now(timezone.utc)).days
                 if jours_restants < 0:
                     points_a_corriger.append({"message": "Le certificat a expiré.", "criticite": "CRITICAL"})
                 elif jours_restants < 30:
@@ -194,7 +194,7 @@ class SecurityAnalyzer:
                     "criticite": "INFO",
                     "points_a_corriger": points_a_corriger,
                     "details": {
-                        "date_expiration": leaf_cert.not_valid_after.strftime('%Y-%m-%d'),
+                        "date_expiration": leaf_cert.not_valid_after_utc.strftime('%Y-%m-%d'),
                         "jours_restants": jours_restants,
                         "noms_alternatifs_sujet (SAN)": [name for name in leaf_cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value.get_values_for_type(general_name.DNSName)],
                         "chaine_de_certificats": [cert.subject.rfc4514_string() for cert in deployment.received_certificate_chain],
