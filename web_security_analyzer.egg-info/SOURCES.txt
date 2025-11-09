@@ -1,7 +1,9 @@
+README.md
 setup.py
 src/__init__.py
 src/config.py
 src/reporters.py
+src/scanner.py
 src/utils.py
 src/analyzers/__init__.py
 src/analyzers/cookies.py
