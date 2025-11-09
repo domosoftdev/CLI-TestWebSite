@@ -163,7 +163,11 @@ class SecurityAnalyzer:
                             "remediation_id": "SSL_CHAIN_INCOMPLETE"
                         })
                     else:
-                        points_a_corriger.append({"message": f"La chaîne de certificats n'est pas fiable: {error_str}", "criticite": "HIGH"})
+                        points_a_corriger.append({
+                            "message": f"La chaîne de certificats n'est pas fiable: {error_str}",
+                            "criticite": "HIGH",
+                            "remediation_id": "SSL_CHAIN_UNTRUSTED"
+                        })
 
                 # 2. Temporal Validity
                 jours_restants = (leaf_cert.not_valid_after_utc - datetime.now(timezone.utc)).days
