@@ -49,7 +49,8 @@ REMEDIATION_ADVICE = {
     "SERVER_HEADER_VISIBLE": {"nginx": "Dans votre configuration nginx, ajoutez 'server_tokens off;'.", "apache": "Dans votre configuration apache, ajoutez 'ServerTokens Prod'.", "default": "Supprimez ou masquez les en-têtes qui révèlent la version de votre serveur."},
     "JS_LIB_OBSOLETE": {"default": "Une ou plusieurs bibliothèques JavaScript sont obsolètes. Mettez-les à jour vers leur dernière version stable pour corriger les vulnérabilités connues."},
     "WP_CONFIG_BAK_EXPOSED": {"default": "Supprimez immédiatement le fichier de sauvegarde de configuration WordPress exposé publiquement."},
-    "WP_USER_ENUM_ENABLED": {"default": "Empêchez l'énumération des utilisateurs sur WordPress, par exemple en utilisant un plugin de sécurité ou en ajoutant des règles de réécriture."}
+    "WP_USER_ENUM_ENABLED": {"default": "Empêchez l'énumération des utilisateurs sur WordPress, par exemple en utilisant un plugin de sécurité ou en ajoutant des règles de réécriture."},
+    "SSL_CHAIN_INCOMPLETE": {"default": "La chaîne de certificats SSL est incomplète. Configurez votre serveur pour qu'il envoie tous les certificats intermédiaires nécessaires afin de garantir la confiance sur tous les appareils."}
 }
 
 # --- Consolidator Tool Configuration ---

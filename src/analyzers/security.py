@@ -159,7 +159,8 @@ class SecurityAnalyzer:
                     if "unable to get local issuer certificate" in error_str or "candidates exhausted" in error_str:
                         points_a_corriger.append({
                             "message": "La chaîne de certificats est incomplète. Le serveur ne fournit probablement pas tous les certificats intermédiaires.",
-                            "criticite": "MEDIUM"
+                            "criticite": "MEDIUM",
+                            "remediation_id": "SSL_CHAIN_INCOMPLETE"
                         })
                     else:
                         points_a_corriger.append({"message": f"La chaîne de certificats n'est pas fiable: {error_str}", "criticite": "HIGH"})
