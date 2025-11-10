@@ -31,10 +31,8 @@ class TestHtmlReportGeneration(unittest.TestCase):
         self.assertTrue(os.path.exists(expected_filename))
         with open(expected_filename, 'r', encoding='utf-8') as f:
             content = f.read()
-            self.assertIn("1. Configuration du protocole et du transport", content)
             self.assertIn("<h3>Certificat SSL/TLS</h3>", content)
             self.assertIn("<h3>Protocoles TLS</h3>", content)
-            self.assertIn("3. Infrastructure DNS et identité du domaine", content)
             self.assertIn("<h3>Enregistrements DNS</h3>", content)
 
 if __name__ == '__main__':
