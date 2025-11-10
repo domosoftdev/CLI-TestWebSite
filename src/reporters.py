@@ -66,7 +66,14 @@ def generate_html_report(results, hostname, output_dir="."):
         rows = ""
         for point in data.get('points_a_corriger', []):
             rows += f"<tr><td>{point.get('criticite')}</td><td>{point.get('message')}</td><td>{get_remediation_html(point)}</td></tr>"
-        return rows
+
+        details_html = "<h4>Détails techniques:</h4><ul>"
+        if 'details' in data:
+            for key, value in data['details'].items():
+                details_html += f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>"
+        details_html += "</ul>"
+
+        return rows + f"<tr><td colspan='3'>{details_html}</td></tr>"
 
     def render_tls_protocols(data):
         rows = ""
