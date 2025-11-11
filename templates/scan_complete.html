@@ -1,22 +1,19 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
 
 {% block title %}
 Scan Terminé - Analyseur de Sécurité Web
 {% endblock %}
 
-{% block header %}
-<h1>Scan Terminé !</h1>
-{% endblock %}
-
 {% block content %}
-    <div class="report-group">
-        {% if report_path %}
-            <p>Le scan pour votre domaine est terminé avec succès.</p>
-            <p><strong><a href="{{ url_for('serve_report', filename=report_path) }}" target="_blank">Cliquez ici pour voir le rapport HTML</a></strong></p>
-            <p><small>(Chemin du fichier : {{ report_path }})</small></p>
-        {% else %}
-            <p>Une erreur est survenue pendant le scan. Veuillez consulter les logs du serveur pour plus de détails.</p>
-        {% endif %}
-        <a href="{{ url_for('index') }}">Lancer un autre scan</a>
-    </div>
+    <h1>Scan Terminé !</h1>
+
+    {% if report_path %}
+        <p>Le scan pour votre domaine est terminé avec succès.</p>
+        <p><strong><a href="{{ url_for('static', filename=report_path) }}" target="_blank">Cliquez ici pour voir le rapport HTML</a></strong></p>
+        <p><small>(Chemin du fichier : {{ report_path }})</small></p>
+    {% else %}
+        <p>Une erreur est survenue pendant le scan. Veuillez consulter les logs du serveur pour plus de détails.</p>
+    {% endif %}
+
+    <a href="{{ url_for('index') }}">Lancer un autre scan</a>
 {% endblock %}

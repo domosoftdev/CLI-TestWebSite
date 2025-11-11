@@ -2,7 +2,7 @@ import os
 import sys
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
@@ -41,7 +41,7 @@ def index():
                     # Catch any parsing or strptime errors for malformed filenames
                     continue
     reports.sort(key=lambda r: datetime.strptime(r['date'], '%d/%m/%Y'), reverse=True)
-    return render_template('index.html', reports=reports, now=datetime.now(timezone.utc))
+    return render_template('index.html', reports=reports)
 
 @app.route('/scan', methods=['POST'])
 def scan():
