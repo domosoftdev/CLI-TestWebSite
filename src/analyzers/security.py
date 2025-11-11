@@ -18,6 +18,7 @@ from sslyze import (
     Scanner,
     ServerScanRequest,
     ServerNetworkLocation,
+    ServerNetworkConfiguration,
     ScanCommandAttemptStatusEnum,
     ServerScanStatusEnum,
 )
@@ -131,7 +132,15 @@ class SecurityAnalyzer:
         if self.verbose: print(f"  - Vérification du certificat SSL pour {hostname}")
         try:
             server_location = ServerNetworkLocation(hostname=hostname, port=443)
-            scan_request = ServerScanRequest(server_location=server_location, scan_commands={ScanCommand.CERTIFICATE_INFO})
+            network_config = ServerNetworkConfiguration(
+                tls_server_name_indication=hostname, network_timeout=30
+            )
+            # Activer la chasing AIA pour reconstruire la chaîne si elle est incomplète
+            scan_request = ServerScanRequest(
+                server_location=server_location,
+                scan_commands={ScanCommand.CERTIFICATE_INFO},
+                network_configuration=network_config
+            )
             scanner = Scanner()
             scanner.queue_scans([scan_request])
 
@@ -150,6 +159,8 @@ class SecurityAnalyzer:
                 deployment = cert_info.certificate_deployments[0]
                 leaf_cert = deployment.received_certificate_chain[0]
                 validation = deployment.path_validation_results[0]
+
+                verified_chain = validation.verified_certificate_chain or deployment.received_certificate_chain
 
                 points_a_corriger = []
 
@@ -205,8 +216,8 @@ class SecurityAnalyzer:
                         "chaine_de_certificats": [{
                             "sujet": cert.subject.rfc4514_string(),
                             "emetteur": cert.issuer.rfc4514_string(),
-                            "is_problematic": not validation.was_validation_successful and i == len(deployment.received_certificate_chain) - 1
-                        } for i, cert in enumerate(deployment.received_certificate_chain)],
+                            "is_problematic": not validation.was_validation_successful and i == len(verified_chain) - 1
+                        } for i, cert in enumerate(verified_chain)],
                         "force_cle_publique": key_info,
                         "algorithme_signature": sig_algo,
                     }
@@ -221,7 +232,14 @@ class SecurityAnalyzer:
         results = []
         try:
             server_location = ServerNetworkLocation(hostname=hostname, port=443)
-            scan_request = ServerScanRequest(server_location=server_location, scan_commands={ScanCommand.SSL_2_0_CIPHER_SUITES, ScanCommand.SSL_3_0_CIPHER_SUITES, ScanCommand.TLS_1_0_CIPHER_SUITES, ScanCommand.TLS_1_1_CIPHER_SUITES, ScanCommand.TLS_1_2_CIPHER_SUITES, ScanCommand.TLS_1_3_CIPHER_SUITES})
+            network_config = ServerNetworkConfiguration(
+                tls_server_name_indication=hostname, network_timeout=30
+            )
+            scan_request = ServerScanRequest(
+                server_location=server_location,
+                scan_commands={ScanCommand.SSL_2_0_CIPHER_SUITES, ScanCommand.SSL_3_0_CIPHER_SUITES, ScanCommand.TLS_1_0_CIPHER_SUITES, ScanCommand.TLS_1_1_CIPHER_SUITES, ScanCommand.TLS_1_2_CIPHER_SUITES, ScanCommand.TLS_1_3_CIPHER_SUITES},
+                network_configuration=network_config
+            )
             scanner = Scanner()
             scanner.queue_scans([scan_request])
             for result in scanner.get_results():
