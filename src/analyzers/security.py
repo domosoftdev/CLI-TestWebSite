@@ -202,7 +202,11 @@ class SecurityAnalyzer:
                         "date_expiration": leaf_cert.not_valid_after_utc.strftime('%Y-%m-%d'),
                         "jours_restants": jours_restants,
                         "noms_alternatifs_sujet (SAN)": [name for name in leaf_cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value.get_values_for_type(general_name.DNSName)],
-                        "chaine_de_certificats": [cert.subject.rfc4514_string() for cert in deployment.received_certificate_chain],
+                        "chaine_de_certificats": [{
+                            "sujet": cert.subject.rfc4514_string(),
+                            "emetteur": cert.issuer.rfc4514_string(),
+                            "is_problematic": not validation.was_validation_successful and i == len(deployment.received_certificate_chain) - 1
+                        } for i, cert in enumerate(deployment.received_certificate_chain)],
                         "force_cle_publique": key_info,
                         "algorithme_signature": sig_algo,
                     }

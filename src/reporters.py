@@ -70,7 +70,14 @@ def generate_html_report(results, hostname, output_dir="."):
         details_html = "<h4>Détails techniques:</h4><ul>"
         if 'details' in data:
             for key, value in data['details'].items():
-                details_html += f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>"
+                if key == 'chaine_de_certificats':
+                    details_html += "<li><strong>Chaîne de certificats:</strong><ul>"
+                    for cert in value:
+                        style = "style='background-color: #f8d7da;'" if cert.get('is_problematic') else ""
+                        details_html += f"<li {style}>Sujet: {cert.get('sujet')}<br>Émetteur: {cert.get('emetteur')}</li>"
+                    details_html += "</ul></li>"
+                else:
+                    details_html += f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>"
         details_html += "</ul>"
 
         return rows + f"<tr><td colspan='3'>{details_html}</td></tr>"
