@@ -544,3 +544,5 @@ class SecurityAnalyzer:
             }
         except whois.parser.PywhoisError as e:
             return {"statut": "ERROR", "message": f"Impossible de récupérer les informations WHOIS : {e}", "criticite": "LOW"}
+        except ConnectionResetError:
+            return {"statut": "ERROR", "message": "La connexion avec le serveur WHOIS a été réinitialisée.", "criticite": "LOW"}
