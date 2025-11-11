@@ -3,12 +3,12 @@ import os
 import json
 import csv
 import copy
-from datetime import datetime
+from datetime import datetime, timezone
 from .config import REMEDIATION_ADVICE
 
 def generate_json_report(results, hostname, output_dir="."):
     os.makedirs(output_dir, exist_ok=True)
-    date_str = datetime.now().strftime('%d%m%y')
+    date_str = datetime.now(timezone.utc).strftime('%d%m%y')
     filename = os.path.join(output_dir, f"{hostname}_{date_str}.json")
     try:
         with open(filename, 'w', encoding='utf-8') as f:
@@ -19,7 +19,7 @@ def generate_json_report(results, hostname, output_dir="."):
 
 def generate_csv_report(results, hostname, output_dir="."):
     os.makedirs(output_dir, exist_ok=True)
-    date_str = datetime.now().strftime('%d%m%y')
+    date_str = datetime.now(timezone.utc).strftime('%d%m%y')
     filename = os.path.join(output_dir, f"{hostname}_{date_str}.csv")
     header = ['Catégorie', 'Sous-catégorie', 'Statut', 'Criticité', 'Description', 'Vulnérabilités']
     rows = []
@@ -50,7 +50,7 @@ def generate_csv_report(results, hostname, output_dir="."):
 
 def generate_html_report(results, hostname, output_dir="."):
     os.makedirs(output_dir, exist_ok=True)
-    date_str = datetime.now().strftime('%d%m%y')
+    date_str = datetime.now(timezone.utc).strftime('%d%m%y')
     filename = os.path.join(output_dir, f"{hostname}_{date_str}.html")
     score = results.get('score_final', 0)
     grade = results.get('note', 'N/A')
