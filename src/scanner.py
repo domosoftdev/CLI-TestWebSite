@@ -33,9 +33,7 @@ def run_full_scan(domain, scans_dir="scans", verbose=False, formats="html,json,c
 
         print(f"--- Scan et rapports terminés pour {hostname} ---")
     except Exception as e:
-        import traceback
         print(f"❌ Une erreur majeure est survenue durant le scan de {hostname}: {e}", file=sys.stderr)
-        traceback.print_exc()
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
