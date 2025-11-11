@@ -210,6 +210,8 @@ class SecurityAnalyzer:
                 return result_dict
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return {"statut": "ERROR", "message": f"Erreur inattendue: {e}", "criticite": "HIGH"}
 
     def _scan_tls_protocols(self, hostname):
@@ -235,6 +237,8 @@ class SecurityAnalyzer:
                         results.append({"protocole": name, "statut": "SUCCESS", "message": "Non supporté", "criticite": "INFO"})
                 return results
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return [{"statut": "ERROR", "message": f"Erreur inattendue lors du scan sslyze: {e}", "criticite": "HIGH"}]
 
     def _check_http_to_https_redirect(self, hostname):
@@ -244,7 +248,7 @@ class SecurityAnalyzer:
             if 300 <= response.status_code < 400 and response.headers.get('Location', '').startswith('https://'):
                 return {"statut": "SUCCESS", "message": "Redirection correcte vers HTTPS.", "criticite": "INFO"}
             return {"statut": "ERROR", "message": "La redirection de HTTP vers HTTPS n'est pas correctement configurée.", "criticite": "MEDIUM", "remediation_id": "NO_HTTPS_REDIRECT"}
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             return {"statut": "ERROR", "message": f"Erreur lors du test de redirection: {e}", "criticite": "HIGH"}
 
     def _check_dns_records(self, hostname):
@@ -252,21 +256,21 @@ class SecurityAnalyzer:
         results = {}
         try:
             ns_ans = dns.resolver.resolve(hostname, 'NS'); results['ns'] = {"statut": "SUCCESS", "valeurs": [str(r.target) for r in ns_ans], "criticite": "INFO"}
-        except Exception as e: results['ns'] = {"statut": "ERROR", "message": f"Impossible de récupérer les enregistrements NS ({e})", "criticite": "LOW"}
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.Timeout) as e: results['ns'] = {"statut": "ERROR", "message": f"Impossible de récupérer les enregistrements NS ({e})", "criticite": "LOW"}
         try:
             a_ans = dns.resolver.resolve(hostname, 'A'); results['a'] = {"statut": "SUCCESS", "valeurs": [r.address for r in a_ans], "criticite": "INFO"}
-        except Exception as e: results['a'] = {"statut": "ERROR", "message": f"Impossible de récupérer les enregistrements A ({e})", "criticite": "LOW"}
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.Timeout) as e: results['a'] = {"statut": "ERROR", "message": f"Impossible de récupérer les enregistrements A ({e})", "criticite": "LOW"}
         try:
             mx_ans = dns.resolver.resolve(hostname, 'MX'); mx_records = sorted([(r.preference, str(r.exchange)) for r in mx_ans]); results['mx'] = {"statut": "SUCCESS", "valeurs": [f"Prio {p}: {e}" for p, e in mx_records], "criticite": "INFO"}
-        except Exception as e: results['mx'] = {"statut": "ERROR", "message": f"Impossible de récupérer les enregistrements MX ({e})", "criticite": "LOW"}
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.Timeout) as e: results['mx'] = {"statut": "ERROR", "message": f"Impossible de récupérer les enregistrements MX ({e})", "criticite": "LOW"}
         try:
             dmarc_ans = dns.resolver.resolve(f"_dmarc.{hostname}", 'TXT'); dmarc_rec = ' '.join([b.decode() for b in dmarc_ans[0].strings]); results['dmarc'] = {"statut": "SUCCESS", "valeur": dmarc_rec, "criticite": "INFO"}
-        except Exception: results['dmarc'] = {"statut": "ERROR", "message": "Aucun enregistrement DMARC trouvé.", "criticite": "HIGH", "remediation_id": "DMARC_MISSING"}
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.Timeout): results['dmarc'] = {"statut": "ERROR", "message": "Aucun enregistrement DMARC trouvé.", "criticite": "HIGH", "remediation_id": "DMARC_MISSING"}
         try:
             txt_ans = dns.resolver.resolve(hostname, 'TXT'); spf_rec = next((s for s in [' '.join([b.decode() for r in txt_ans]) for r in txt_ans] if s.startswith('v=spf1')), None)
             if spf_rec: results['spf'] = {"statut": "SUCCESS", "valeur": spf_rec, "criticite": "INFO"}
             else: results['spf'] = {"statut": "ERROR", "message": "Aucun enregistrement SPF trouvé.", "criticite": "HIGH", "remediation_id": "SPF_MISSING"}
-        except Exception: results['spf'] = {"statut": "ERROR", "message": "Aucun enregistrement TXT trouvé.", "criticite": "HIGH"}
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.Timeout): results['spf'] = {"statut": "ERROR", "message": "Aucun enregistrement TXT trouvé.", "criticite": "HIGH"}
         return results
 
     def _check_cookie_security(self, hostname, ssl_cert_result=None):
@@ -289,7 +293,7 @@ class SecurityAnalyzer:
             if ssl_cert_result and ssl_cert_result.get('points_a_corriger'):
                 return [{"statut": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié.", "criticite": "INFO"}]
             return [{"statut": "ERROR", "message": "Erreur SSL lors de la connexion.", "criticite": "HIGH"}]
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             return [{"statut": "ERROR", "message": f"Erreur lors de la récupération des cookies: {e}", "criticite": "HIGH"}]
 
     def _check_security_headers(self, hostname, ssl_cert_result=None):
@@ -316,7 +320,7 @@ class SecurityAnalyzer:
             if ssl_cert_result and ssl_cert_result.get('points_a_corriger'):
                 return {"statut": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié.", "criticite": "INFO"}
             return {"statut": "ERROR", "message": "Erreur SSL lors de la connexion.", "criticite": "HIGH"}
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             return {"statut": "ERROR", "message": f"Erreur lors de la récupération des en-têtes: {e}", "criticite": "HIGH"}
 
     def _check_cms_footprint(self, hostname, ssl_cert_result=None):
@@ -329,7 +333,7 @@ class SecurityAnalyzer:
             if ssl_cert_result and ssl_cert_result.get('points_a_corriger'):
                 return {"statut": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié.", "criticite": "INFO"}
             return {"statut": "ERROR", "message": "Erreur SSL lors de la connexion.", "criticite": "HIGH"}
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             return {"statut": "ERROR", "message": f"Erreur lors de l'analyse CMS: {e}", "criticite": "HIGH"}
 
     def _check_cms_paths(self, hostname, ssl_cert_result=None):
@@ -395,7 +399,7 @@ class SecurityAnalyzer:
             if ssl_cert_result and ssl_cert_result.get('points_a_corriger'):
                 return [{"statut": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié.", "criticite": "INFO"}]
             return [{"statut": "ERROR", "message": "Erreur SSL lors de la connexion.", "criticite": "HIGH"}]
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             return [{"statut": "ERROR", "message": f"Erreur lors de l'analyse des bibliothèques JS: {e}", "criticite": "HIGH"}]
         return results
 
@@ -433,9 +437,25 @@ class SecurityAnalyzer:
 
     def _format_whois_value(self, value):
         if isinstance(value, list):
-            return ", ".join([v.isoformat() if isinstance(v, datetime) else str(v) for v in value])
+            # Process each item in the list, applying timezone info to datetimes
+            formatted_list = []
+            for item in value:
+                if isinstance(item, datetime):
+                    # If datetime is naive, make it timezone-aware (UTC)
+                    if item.tzinfo is None:
+                        formatted_list.append(item.replace(tzinfo=timezone.utc).isoformat())
+                    else:
+                        formatted_list.append(item.isoformat())
+                else:
+                    formatted_list.append(str(item))
+            return ", ".join(formatted_list)
+
         if isinstance(value, datetime):
+            # If datetime is naive, make it timezone-aware (UTC)
+            if value.tzinfo is None:
+                return value.replace(tzinfo=timezone.utc).isoformat()
             return value.isoformat()
+
         return str(value) if value is not None else "N/A"
 
     def _check_whois_info(self, hostname):
@@ -464,5 +484,5 @@ class SecurityAnalyzer:
                 "registrant_org": self._format_whois_value(w.get('org')),
                 "registrant_address": ", ".join(filter(lambda x: x and x != "N/A", registrant_address)) or "N/A",
             }
-        except Exception as e:
+        except whois.parser.PywhoisError as e:
             return {"statut": "ERROR", "message": f"Impossible de récupérer les informations WHOIS : {e}", "criticite": "LOW"}
