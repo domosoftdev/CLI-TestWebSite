@@ -74,6 +74,7 @@ def generate_html_report(results, hostname, output_dir="."):
                     details_html += "<li><strong>Chaîne de certificats:</strong><ul>"
                     for cert in value:
                         style = "style='background-color: #f8d7da;'" if cert.get('is_problematic') else ""
+                        details_html += f"<li {style}>Sujet: {cert.get('sujet')}<br><br>Émetteur: {cert.get('emetteur')}</li>"
                         details_html += f"<li {style}>Sujet: {cert.get('sujet')}<br>Émetteur: {cert.get('emetteur')}</li>"
                     details_html += "</ul></li>"
                 else:
