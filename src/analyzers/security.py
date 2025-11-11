@@ -218,8 +218,6 @@ class SecurityAnalyzer:
                             "emetteur": cert.issuer.rfc4514_string(),
                             "is_problematic": not validation.was_validation_successful and i == len(verified_chain) - 1
                         } for i, cert in enumerate(verified_chain)],
-                            "is_problematic": not validation.was_validation_successful and i == len(deployment.received_certificate_chain) - 1
-                        } for i, cert in enumerate(deployment.received_certificate_chain)],
                         "force_cle_publique": key_info,
                         "algorithme_signature": sig_algo,
                     }
