@@ -71,12 +71,19 @@ def generate_html_report(results, hostname, output_dir="."):
         if 'details' in data:
             for key, value in data['details'].items():
                 if key == 'chaine_de_certificats':
-                    details_html += "<li><strong>Chaîne de certificats:</strong><ul>"
-                    for cert in value:
-                        style = "style='background-color: #f8d7da;'" if cert.get('is_problematic') else ""
-                        details_html += f"<li {style}>Sujet: {cert.get('sujet')}<br><br>Émetteur: {cert.get('emetteur')}</li>"
-                        details_html += f"<li {style}>Sujet: {cert.get('sujet')}<br>Émetteur: {cert.get('emetteur')}</li>"
-                    details_html += "</ul></li>"
+                    details_html += "<li><strong>Chaîne de certificats:</strong><div class='certificate-chain'>"
+                    for i, cert in enumerate(value):
+                        style = "style='border-left: 5px solid #dc3545;'" if cert.get('is_problematic') else "style='border-left: 5px solid #28a745;'"
+                        details_html += f"""
+                        <div class='certificate-entry' {style}>
+                            <p><strong>Certificat #{i+1}</strong></p>
+                            <p><strong>Sujet:</strong> {cert.get('sujet')}</p>
+                            <p><strong>Émetteur:</strong> {cert.get('emetteur')}</p>
+                            <p><strong>Explication:</strong> {cert.get('explanation')}</p>
+                            {'<p><strong>Remediation:</strong> ' + cert.get('remediation') + '</p>' if cert.get('remediation') else ''}
+                        </div>
+                        """
+                    details_html += "</div></li>"
                 else:
                     details_html += f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>"
         details_html += "</ul>"
@@ -226,6 +233,14 @@ def generate_html_report(results, hostname, output_dir="."):
             border-left: 4px solid #ffeeba;
             padding: 10px;
             margin-top: 10px;
+        }}
+        .certificate-chain {{
+            margin-top: 10px;
+        }}
+        .certificate-entry {{
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
         }}
         footer {{
             background-color: #2c3e50;
