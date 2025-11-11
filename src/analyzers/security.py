@@ -210,7 +210,12 @@ class SecurityAnalyzer:
 
                 # Construction de la chaîne de certificats détaillée
                 chain_details = []
-                for i, cert in enumerate(deployment.received_certificate_chain):
+                # Use the received chain and supplement with the verified chain if it's longer
+                final_chain = deployment.received_certificate_chain
+                if len(verified_chain) > len(final_chain):
+                    final_chain = verified_chain
+
+                for i, cert in enumerate(final_chain):
                     detail = {
                         "issuer_cn": self._parse_cert_field(cert.issuer, NameOID.COMMON_NAME),
                         "issuer_org": self._parse_cert_field(cert.issuer, NameOID.ORGANIZATION_NAME),
@@ -222,7 +227,7 @@ class SecurityAnalyzer:
                         "explanation": "Ce certificat est valide et approuvé."
                     }
                     # Marquer le dernier certificat comme problématique si la validation a échoué
-                    if not validation.was_validation_successful and i == len(deployment.received_certificate_chain) - 1:
+                    if not validation.was_validation_successful and i == len(final_chain) - 1:
                         detail["is_problematic"] = True
                         error_str = str(validation.validation_error)
                         if "unable to get local issuer certificate" in error_str:
