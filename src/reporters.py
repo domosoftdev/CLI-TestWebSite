@@ -55,138 +55,213 @@ def generate_html_report(results, hostname, output_dir="."):
     score = results.get('score_final', 0)
     grade = results.get('note', 'N/A')
 
-    def get_gauge_class(score):
-        if score >= 90: return "excellent" # Grade A
-        if score >= 80: return "good"      # Grade B
-        if score >= 70: return "medium"    # Grade C
-        if score >= 60: return "passable"  # Grade D
-        return "bad"                       # Grades D, F
-    gauge_class = get_gauge_class(score)
+    def get_remediation_html(item_data):
+        remediation_id = item_data.get('remediation_id')
+        if remediation_id and remediation_id in REMEDIATION_ADVICE:
+            advice = REMEDIATION_ADVICE[remediation_id].get('default', 'Aucun conseil disponible.')
+            return f"<div class='remediation-advice'><strong>Conseil:</strong> {advice}</div>"
+        return ""
 
-    report_structure = {
-        "1. Configuration du protocole et du transport": {"description": "Cette section vérifie la sécurité de la couche réseau et du chiffrement. 📌 Objectif : garantir que la communication est sécurisée et que les protections de base sont en place.", "categories": ["ssl_certificate", "tls_protocols", "http_redirect", "security_headers", "cookie_security"]},
-        "🧠 2. Empreinte applicative et exposition CMS": {"description": "Cette section analyse les traces laissées par les technologies côté serveur. 📌 Objectif : identifier les technologies exposées et les risques liés à des versions vulnérables.", "categories": ["cms_footprint_meta", "cms_footprint_paths", "js_libraries"]},
-        "🌐 3. Infrastructure DNS et identité du domaine": {"description": "Cette section couvre la configuration DNS et les informations WHOIS. 📌 Objectif : vérifier la légitimité du domaine, la protection contre l’usurpation, et la configuration des serveurs.", "categories": ["dns_records", "whois_info"]},
-        "📈 4. Score et indicateurs complémentaires": {"description": "Cette section regroupe les métriques globales ou spécifiques. 📌 Objectif : fournir une synthèse ou un indicateur complémentaire.", "categories": ["parking_score"]}
-    }
+    def render_ssl_certificate(data):
+        rows = ""
+        for point in data.get('points_a_corriger', []):
+            rows += f"<tr><td>{point.get('criticite')}</td><td>{point.get('message')}</td><td>{get_remediation_html(point)}</td></tr>"
 
-    html_content = f'''<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Rapport de Sécurité - {hostname}</title><style>
-            body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 2em;  color: #333; }}
-            h1, h2, h3 {{ color: #2c3e50; }}
-            .report-header {{ display: flex; align-items: center; gap: 2em; border-bottom: 2px solid #e0e0e0; padding-bottom: 1em; margin-bottom: 2em; }}
-            .header-main {{ flex: 3; }} .header-sidebar {{ flex: 1; }}
-            .grading-table table {{ font-size: 0.9em; width: 100%; border: none; }}
-            .grading-table th, .grading-table td {{ border: none; border-bottom: 1px solid #eee; }}
-            .grading-table h3 {{ margin-top: 0; border-bottom: 2px solid #007bff; padding-bottom: 5px;}}
-            .report-group {{ border: 2px solid #007bff; padding: 20px; margin-bottom: 25px; border-radius: 8px; background-color: #f8f9fa; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }}
-            .report-section {{ border: 1px solid #ddd; border-top: 1px solid #eee; padding: 15px; margin-bottom: 15px; border-radius: 5px; background-color: #fff;}}
-            .group-description {{ font-style: italic; color: #555; margin-bottom: 20px; }}
-            .status-text::before {{ content: var(--icon); margin-right: 8px; }}
-            .status-ERROR {{ color: #c0392b; font-weight: bold; --icon: "❌"; }} .status-WARNING {{ color: #f39c12; font-weight: bold; --icon: "⚠️"; }}
-            .status-SUCCESS {{ color: #27ae60; --icon: "✅"; }} .status-INFO {{ color: #2980b9; --icon: "ℹ️"; }}
-            table {{ border-collapse: collapse; width: 100%; }} th, td {{ border: 1px solid #ccc; padding: 8px; text-align: left; }} th {{ background-color: #f2f2f2; }}
-            ul {{ list-style-type: none; padding-left: 0; }} li {{ margin-bottom: 5px; }}
-            .horizontal-list {{ list-style-type: none; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5em; }}
-            .horizontal-list li {{ background-color: #e9ecef; padding: 5px 10px; border-radius: 5px;}}
-            .remediation-advice {{ background-color: #fdf9e2; border-left: 4px solid #f1c40f; padding: 10px; margin-top: 10px; font-size: 0.95em; }}
-            .gauge-container {{ width: 200px; height: 100px; position: relative; overflow: hidden; border-radius: 100px 100px 0 0; background-color: #e9ecef; display: flex; align-items: flex-end; justify-content: center; margin-top: 1em;}}
-            .gauge-fill {{ width: 100%; height: 100%; position: absolute; top: 100%; left: 0; background-color: var(--fill-color, #c0392b); transform-origin: center top; transform: rotate(calc(1.8deg * var(--score, 0))); transition: transform 0.5s ease-in-out; }}
-            .gauge-cover {{ width: 160px; height: 80px; background-color: #f4f6f9; border-radius: 100px 100px 0 0; position: relative; z-index: 1; }}
-            .gauge-text {{ position: absolute; bottom: 5px; z-index: 3; font-size: 2.5em; font-weight: bold; color: #2c3e50; }}
-            .gauge-tick {{ position: absolute; width: 2px; height: 10px; background-color: #95a5a6; top: 100%; left: 50%; transform-origin: center top; z-index: 2; }}
-            .tick-25 {{ transform: translateX(-1px) rotate(45deg); }} .tick-50 {{ transform: translateX(-1px) rotate(90deg); height: 15px; }} .tick-75 {{ transform: translateX(-1px) rotate(135deg); }}
-            .excellent {{ --fill-color: #1F7F0B; }} .good {{ --fill-color: #27ae60; }} .medium {{ --fill-color: #f39c12; }} .passable {{ --fill-color: #F69021; }} .bad {{ --fill-color: #c0392b; }}
-        </style></head><body>
-        <header class="report-header"><div class="header-main"><h1>Rapport d'Analyse de Sécurité pour {hostname}</h1>
-                <div display: inline-block >                
-                    <div class="gauge-container {gauge_class}">
-                        <div class="gauge-tick tick-25"></div><div class="gauge-tick tick-50"></div><div class="gauge-tick tick-75"></div>
-                        <div class="gauge-fill" style="--score: {score};"></div>
-                        <div class="gauge-cover"></div>
-                        <div class="gauge-text">{score} </div>           
-                    </div>
-                    <p style="text-align:center; font-size: 1.2em; margin-top: 1em;">Note Globale : <strong>{grade}</strong></p>
-                </div>
-            </div>
+        details_html = "<h4>Détails techniques:</h4><ul>"
+        if 'details' in data:
+            for key, value in data['details'].items():
+                if key == 'chaine_de_certificats':
+                    details_html += "<li><strong>Chaîne de certificats:</strong><ul>"
+                    for cert in value:
+                        style = "style='background-color: #f8d7da;'" if cert.get('is_problematic') else ""
+                        details_html += f"<li {style}>Sujet: {cert.get('sujet')}<br>Émetteur: {cert.get('emetteur')}</li>"
+                    details_html += "</ul></li>"
+                else:
+                    details_html += f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>"
+        details_html += "</ul>"
 
-            <div class="header-sidebar"><div class='grading-table'><h3>Légende des Notes</h3>
-                <table><tr><th>Note</th><th>Score</th><th>Niveau</th></tr>
-                    <tr><td>A</td><td>90-100</td><td style="color:green;">Excellent</td></tr><tr><td>B</td><td>80-89</td><td style="color:blue;">Bon</td></tr>
-                    <tr><td>C</td><td>70-79</td><td style="color:orange;">Moyen</td></tr><tr><td>D</td><td>60-69</td><td style="color:darkorange;">Passable</td></tr>
-                    <tr><td>F</td><td>0-59</td><td style="color:red;">Insuffisant</td></tr></table>
-                   </div></div></header>'''
-    rendered_categories = set()
+        return rows + f"<tr><td colspan='3'>{details_html}</td></tr>"
+
+    def render_tls_protocols(data):
+        rows = ""
+        for item in data:
+            rows += f"<tr><td>{item.get('protocole')}</td><td>{item.get('statut')}</td><td>{item.get('message')}</td></tr>"
+        return rows
+
+    def render_dns_records(data):
+        rows = ""
+        for record_type, record_data in data.items():
+            valeurs = record_data.get('valeurs') or [record_data.get('valeur')]
+            message = record_data.get('message', ', '.join(filter(None, valeurs)))
+            rows += f"<tr><td>{record_type.upper()}</td><td>{record_data.get('statut')}</td><td>{message}{get_remediation_html(record_data)}</td></tr>"
+        return rows
+
+    def render_security_headers(data):
+        rows = ""
+        for header, header_data in data.get('en-tetes_securite', {}).items():
+            rows += f"<tr><td>{header}</td><td>{header_data.get('statut')}</td><td>{get_remediation_html(header_data)}</td></tr>"
+        return rows
+
+    def render_generic(data):
+        if isinstance(data, dict) and 'statut' in data:
+            return f"<tr><td>-</td><td>{data.get('statut')}</td><td>{data.get('message')}{get_remediation_html(data)}</td></tr>"
+        elif isinstance(data, list):
+            rows = ""
+            for item in data:
+                rows += f"<tr><td>-</td><td>{item.get('statut')}</td><td>{item.get('message')}{get_remediation_html(item)}</td></tr>"
+            return rows
+        return f"<tr><td colspan='3'>{json.dumps(data, indent=2)}</td></tr>"
+
     def render_category(category, data):
-        title_map = {"ssl_certificate": "Certificat SSL/TLS", "tls_protocols": "Protocoles TLS", "http_redirect": "Redirection HTTP", "security_headers": "En-têtes de sécurité", "cookie_security": "Sécurité des cookies", "dns_records": "Enregistrements DNS", "whois_info": "Informations Whois", "cms_footprint_meta": "Détection de CMS (Méta)", "cms_footprint_paths": "Détection de CMS (Chemins)", "js_libraries": "Bibliothèques JavaScript", "parking_score": "Score de Parking"}
+        title_map = {
+            "ssl_certificate": "Certificat SSL/TLS",
+            "tls_protocols": "Protocoles TLS",
+            "http_redirect": "Redirection HTTP",
+            "security_headers": "En-têtes de sécurité",
+            "dns_records": "Enregistrements DNS",
+        }
         title = title_map.get(category, category.replace('_', ' ').title())
-        content = f"<div class='report-section'><h3>{title}</h3>"
-        def get_remediation_html(item_data):
-            remediation_id = item_data.get('remediation_id')
-            server_type = results.get('server')
-            if remediation_id and remediation_id in REMEDIATION_ADVICE:
-                advice_data = REMEDIATION_ADVICE[remediation_id]
-                advice = advice_data.get(server_type, advice_data.get('default', 'Aucun conseil disponible.'))
-                return f"<div class='remediation-advice'><strong>Conseil de remédiation :</strong> {advice}</div>"
-            return ""
-        if category == 'ssl_certificate' and isinstance(data, dict):
-            status_class = data.get('statut', 'INFO')
-            content += f"<p class='status-text status-{status_class}'><strong>Statut global :</strong> {data.get('message', 'N/A')}</p>"
-            content += get_remediation_html(data)
-            if data.get('points_a_corriger'):
-                content += "<strong>Points à corriger :</strong><ul>"
-                for point in data['points_a_corriger']:
-                    content += f"<li><strong class='status-text status-{point.get('criticite')}'>[{point.get('criticite')}]</strong>: {point.get('message')}{get_remediation_html(point)}</li>"
-                content += "</ul>"
-            if data.get('details'):
-                content += "<strong>Détails techniques :</strong><ul>"
-                for key, value in data['details'].items(): content += f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>"
-                content += "</ul>"
-        elif category == 'tls_protocols' and isinstance(data, list):
-            content += "<ul class='horizontal-list'>"
-            for item in data: content += f"<li><strong>{item.get('protocole')}:</strong> <span class='status-text status-{item.get('statut', 'INFO')}'>{item.get('message')}</span></li>"
-            content += "</ul>"
-        elif category == 'dns_records' and isinstance(data, dict):
-            content += "<ul>"
-            for record_type, record_data in data.items():
-                status_class = record_data.get('statut', 'INFO')
-                valeurs = record_data.get('valeurs') or [record_data.get('valeur')]
-                message = record_data.get('message', ', '.join(filter(None, valeurs)))
-                content += f"<li><strong>{record_type.upper()}:</strong> <span class='status-text status-{status_class}'>[{record_data.get('criticite', 'N/A')}]</span> {message}{get_remediation_html(record_data)}</li>"
-            content += "</ul>"
-        elif category == 'whois_info' and isinstance(data, dict):
-            content += "<ul>"
-            for key, value in data.items():
-                if key not in ['statut', 'criticite']: content += f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>"
-            content += "</ul>"
-        elif isinstance(data, dict) and 'statut' in data:
-            status_class = data.get('statut', 'INFO')
-            content += f"<p class='status-text status-{status_class}'><strong>[{data.get('criticite')}]</strong> {data.get('message')}</p>{get_remediation_html(data)}"
-        elif isinstance(data, list) and data and isinstance(data[0], dict) and 'statut' in data[0]:
-            for item in data: content += f"<p class='status-text status-{item.get('statut', 'INFO')}'><strong>[{item.get('criticite')}]</strong> {item.get('message')}</p>{get_remediation_html(item)}"
-        else: content += f"<pre>{json.dumps(data, indent=2, ensure_ascii=False)}</pre>"
-        content += "</div>"; return content
-    main_report_content = ""
-    for group_title, group_data in report_structure.items():
-        main_report_content += f"<div class='report-group'><h2>{group_title}</h2><p class='group-description'>{group_data['description']}</p>"
-        for category in group_data['categories']:
-            if category in results: main_report_content += render_category(category, results[category]); rendered_categories.add(category)
-        main_report_content += "</div>"
-    other_categories_content = ""
-    for category, data in results.items():
-        if category not in rendered_categories and category not in ['hostname', 'score_final', 'note']: other_categories_content += render_category(category, data)
-    if other_categories_content: main_report_content += f"<div class='report-group'><h2>Autres Analyses</h2><div class='report-section'>{other_categories_content}</div></div>"
-    html_content += main_report_content + '''
-        <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                document.querySelectorAll('.report-group > h2').forEach(header => {
-                    header.addEventListener('click', () => {
-                    });
-                });
-            });
-        </script>
-    </body></html>'''
+
+        content = f"<div class='report-group'><h3>{title}</h3><table class='grading-table'><thead><tr><th>Critère</th><th>Statut</th><th>Détails</th></tr></thead><tbody>"
+
+        if category == 'ssl_certificate':
+            content += render_ssl_certificate(data)
+        elif category == 'tls_protocols':
+            content += render_tls_protocols(data)
+        elif category == 'dns_records':
+            content += render_dns_records(data)
+        elif category == 'security_headers':
+            content += render_security_headers(data)
+        else:
+            content += render_generic(data)
+
+        content += "</tbody></table></div>"
+        return content
+
+    def render_all_categories(results):
+        content = ""
+        # Define the order of categories
+        ordered_categories = [
+            "ssl_certificate", "tls_protocols", "http_redirect", "security_headers",
+            "dns_records", "cookie_security", "cms_footprint_meta", "cms_footprint_paths",
+            "js_libraries", "whois_info", "parking_score", "gdpr_compliance"
+        ]
+        for category in ordered_categories:
+            if category in results:
+                content += render_category(category, results[category])
+        return content
+
+    html_content = f'''<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Rapport de Sécurité - {hostname}</title>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #333;
+            line-height: 1.6;
+            background-color: #f4f4f9;
+        }}
+        .container {{
+            width: 90%;
+            margin: 0 auto;
+            padding: 20px;
+        }}
+        header {{
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+            margin-bottom: 30px;
+        }}
+        h1, h2, h3 {{
+            color: #2c3e50;
+        }}
+        .report-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }}
+        .report-group {{
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }}
+        .grading-table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }}
+        .grading-table th, .grading-table td {{
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }}
+        .grading-table th {{
+            background-color: #f8f9fa;
+        }}
+        .grading-table tr:nth-child(even) {{
+            background-color: #f2f2f2;
+        }}
+        .summary {{
+            background-color: #e8f4fc;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }}
+        .score {{
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #007bff;
+        }}
+        .remediation-advice {{
+            background-color: #fff3cd;
+            border-left: 4px solid #ffeeba;
+            padding: 10px;
+            margin-top: 10px;
+        }}
+        footer {{
+            background-color: #2c3e50;
+            color: white;
+            text-align: center;
+            padding: 10px 0;
+            margin-top: 30px;
+        }}
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Rapport de Sécurité - {hostname}</h1>
+    </header>
+    <div class="container">
+        <div class="report-header">
+            <div class="header-main">
+                <h2>Résumé de l'analyse</h2>
+                <p>Date de l'analyse: {datetime.now().strftime('%d/%m/%Y')}</p>
+            </div>
+            <div class="header-sidebar">
+                <div class="score">Score de sécurité : {grade}</div>
+            </div>
+        </div>
+
+        {render_all_categories(results)}
+
+    </div>
+    <footer>
+        <p>© {datetime.now().year} Rapport de Sécurité. Tous droits réservés.</p>
+    </footer>
+</body>
+</html>'''
+
     try:
-        with open(filename, 'w', encoding='utf-8') as f: f.write(html_content)
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(html_content)
         print(f"\n✅ Rapport HTML généré avec succès : {filename}")
         return filename
     except IOError as e:
