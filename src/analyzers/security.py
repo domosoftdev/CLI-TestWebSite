@@ -268,13 +268,31 @@ class SecurityAnalyzer:
             mx_ans = dns.resolver.resolve(hostname, 'MX'); mx_records = sorted([(r.preference, str(r.exchange)) for r in mx_ans]); results['mx'] = {"statut": "SUCCESS", "valeurs": [f"Prio {p}: {e}" for p, e in mx_records], "criticite": "INFO"}
         except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.Timeout) as e: results['mx'] = {"statut": "ERROR", "message": f"Impossible de récupérer les enregistrements MX ({e})", "criticite": "LOW"}
         try:
-            dmarc_ans = dns.resolver.resolve(f"_dmarc.{hostname}", 'TXT'); dmarc_rec = ' '.join([b.decode() for b in dmarc_ans[0].strings]); results['dmarc'] = {"statut": "SUCCESS", "valeur": dmarc_rec, "criticite": "INFO"}
-        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.Timeout): results['dmarc'] = {"statut": "ERROR", "message": "Aucun enregistrement DMARC trouvé.", "criticite": "HIGH", "remediation_id": "DMARC_MISSING"}
+            dmarc_ans = dns.resolver.resolve(f"_dmarc.{hostname}", 'TXT')
+            # A domain should only have one DMARC record, but it can be split into multiple strings.
+            # We take the first answer and concatenate its parts without spaces.
+            dmarc_rec = b"".join(dmarc_ans[0].strings).decode()
+            results['dmarc'] = {"statut": "SUCCESS", "valeur": dmarc_rec, "criticite": "INFO"}
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.Timeout, IndexError):
+            results['dmarc'] = {"statut": "ERROR", "message": "Aucun enregistrement DMARC trouvé.", "criticite": "HIGH", "remediation_id": "DMARC_MISSING"}
+
         try:
-            txt_ans = dns.resolver.resolve(hostname, 'TXT'); spf_rec = next((s for s in [' '.join([b.decode() for r in txt_ans]) for r in txt_ans] if s.startswith('v=spf1')), None)
-            if spf_rec: results['spf'] = {"statut": "SUCCESS", "valeur": spf_rec, "criticite": "INFO"}
-            else: results['spf'] = {"statut": "ERROR", "message": "Aucun enregistrement SPF trouvé.", "criticite": "HIGH", "remediation_id": "SPF_MISSING"}
-        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.Timeout): results['spf'] = {"statut": "ERROR", "message": "Aucun enregistrement TXT trouvé.", "criticite": "HIGH"}
+            txt_ans = dns.resolver.resolve(hostname, 'TXT')
+            spf_rec = None
+            # A domain can have multiple TXT records. We need to find the SPF one.
+            for rdata in txt_ans:
+                # Each rdata can have multiple strings, which should be concatenated.
+                txt_content = b"".join(rdata.strings).decode()
+                if txt_content.startswith('v=spf1'):
+                    spf_rec = txt_content
+                    break  # Found SPF record, no need to check others
+
+            if spf_rec:
+                results['spf'] = {"statut": "SUCCESS", "valeur": spf_rec, "criticite": "INFO"}
+            else:
+                results['spf'] = {"statut": "ERROR", "message": "Aucun enregistrement SPF trouvé.", "criticite": "HIGH", "remediation_id": "SPF_MISSING"}
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.Timeout):
+            results['spf'] = {"statut": "ERROR", "message": "Aucun enregistrement TXT trouvé.", "criticite": "HIGH", "remediation_id": "SPF_MISSING"}
         return results
 
     def _check_cookie_security(self, hostname, ssl_cert_result=None):
