@@ -203,6 +203,28 @@ class SecurityAnalyzer:
                 if sig_algo.lower() in ['md5', 'sha1']:
                      points_a_corriger.append({"message": f"L'algorithme de signature ({sig_algo}) est faible et obsolète.", "criticite": "HIGH"})
 
+                # Construction de la chaîne de certificats détaillée
+                chain_details = []
+                for i, cert in enumerate(deployment.received_certificate_chain):
+                    detail = {
+                        "sujet": cert.subject.rfc4514_string(),
+                        "emetteur": cert.issuer.rfc4514_string(),
+                        "is_problematic": False,
+                        "explanation": "Ce certificat est valide et approuvé."
+                    }
+                    # Marquer le dernier certificat comme problématique si la validation a échoué
+                    # et qu'il s'agit bien de la racine du problème.
+                    if not validation.was_validation_successful and i == len(deployment.received_certificate_chain) - 1:
+                        detail["is_problematic"] = True
+                        error_str = str(validation.validation_error)
+                        if "unable to get local issuer certificate" in error_str:
+                            detail["explanation"] = "Ce certificat intermédiaire n'est pas approuvé par une autorité de certification racine connue. Cela indique que la chaîne de certificats est incomplète car le certificat racine manque."
+                            detail["remediation"] = "Assurez-vous que le serveur est configuré pour envoyer la chaîne de certificats complète, y compris tous les certificats intermédiaires jusqu'à une racine de confiance."
+                        else:
+                            detail["explanation"] = f"La validation de ce certificat a échoué avec l'erreur : {error_str}"
+                            detail["remediation"] = "Vérifiez la validité et la configuration de ce certificat sur le serveur."
+
+                    chain_details.append(detail)
                 # Final result construction
                 result_dict = {
                     "statut": "SUCCESS",
@@ -213,11 +235,7 @@ class SecurityAnalyzer:
                         "date_expiration": leaf_cert.not_valid_after_utc.strftime('%Y-%m-%d'),
                         "jours_restants": jours_restants,
                         "noms_alternatifs_sujet (SAN)": [name for name in leaf_cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value.get_values_for_type(general_name.DNSName)],
-                        "chaine_de_certificats": [{
-                            "sujet": cert.subject.rfc4514_string(),
-                            "emetteur": cert.issuer.rfc4514_string(),
-                            "is_problematic": not validation.was_validation_successful and i == len(verified_chain) - 1
-                        } for i, cert in enumerate(verified_chain)],
+                        "chaine_de_certificats": chain_details,
                         "force_cle_publique": key_info,
                         "algorithme_signature": sig_algo,
                     }
