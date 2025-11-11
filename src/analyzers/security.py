@@ -203,6 +203,28 @@ class SecurityAnalyzer:
                 if sig_algo.lower() in ['md5', 'sha1']:
                      points_a_corriger.append({"message": f"L'algorithme de signature ({sig_algo}) est faible et obsolète.", "criticite": "HIGH"})
 
+                # Construction de la chaîne de certificats détaillée
+                chain_details = []
+                for i, cert in enumerate(deployment.received_certificate_chain):
+                    detail = {
+                        "sujet": cert.subject.rfc4514_string(),
+                        "emetteur": cert.issuer.rfc4514_string(),
+                        "is_problematic": False,
+                        "explanation": "Ce certificat est valide et approuvé."
+                    }
+                    # Marquer le dernier certificat comme problématique si la validation a échoué
+                    # et qu'il s'agit bien de la racine du problème.
+                    if not validation.was_validation_successful and i == len(deployment.received_certificate_chain) - 1:
+                        detail["is_problematic"] = True
+                        error_str = str(validation.validation_error)
+                        if "unable to get local issuer certificate" in error_str:
+                            detail["explanation"] = "Ce certificat intermédiaire n'est pas approuvé par une autorité de certification racine connue. Cela indique que la chaîne de certificats est incomplète car le certificat racine manque."
+                            detail["remediation"] = "Assurez-vous que le serveur est configuré pour envoyer la chaîne de certificats complète, y compris tous les certificats intermédiaires jusqu'à une racine de confiance."
+                        else:
+                            detail["explanation"] = f"La validation de ce certificat a échoué avec l'erreur : {error_str}"
+                            detail["remediation"] = "Vérifiez la validité et la configuration de ce certificat sur le serveur."
+
+                    chain_details.append(detail)
                 # Final result construction
                 result_dict = {
                     "statut": "SUCCESS",
@@ -488,3 +510,5 @@ class SecurityAnalyzer:
             }
         except Exception as e:
             return {"statut": "ERROR", "message": f"Impossible de récupérer les informations WHOIS : {e}", "criticite": "LOW"}
+        except ConnectionResetError:
+            return {"statut": "ERROR", "message": "La connexion avec le serveur WHOIS a été réinitialisée.", "criticite": "LOW"}
