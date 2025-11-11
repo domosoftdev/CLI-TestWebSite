@@ -3,12 +3,12 @@ import os
 import json
 import csv
 import copy
-from datetime import datetime, timezone
+from datetime import datetime
 from .config import REMEDIATION_ADVICE
 
 def generate_json_report(results, hostname, output_dir="."):
     os.makedirs(output_dir, exist_ok=True)
-    date_str = datetime.now(timezone.utc).strftime('%d%m%y')
+    date_str = datetime.now().strftime('%d%m%y')
     filename = os.path.join(output_dir, f"{hostname}_{date_str}.json")
     try:
         with open(filename, 'w', encoding='utf-8') as f:
@@ -19,7 +19,7 @@ def generate_json_report(results, hostname, output_dir="."):
 
 def generate_csv_report(results, hostname, output_dir="."):
     os.makedirs(output_dir, exist_ok=True)
-    date_str = datetime.now(timezone.utc).strftime('%d%m%y')
+    date_str = datetime.now().strftime('%d%m%y')
     filename = os.path.join(output_dir, f"{hostname}_{date_str}.csv")
     header = ['Catégorie', 'Sous-catégorie', 'Statut', 'Criticité', 'Description', 'Vulnérabilités']
     rows = []
@@ -50,7 +50,7 @@ def generate_csv_report(results, hostname, output_dir="."):
 
 def generate_html_report(results, hostname, output_dir="."):
     os.makedirs(output_dir, exist_ok=True)
-    date_str = datetime.now(timezone.utc).strftime('%d%m%y')
+    date_str = datetime.now().strftime('%d%m%y')
     filename = os.path.join(output_dir, f"{hostname}_{date_str}.html")
     score = results.get('score_final', 0)
     grade = results.get('note', 'N/A')
@@ -75,7 +75,6 @@ def generate_html_report(results, hostname, output_dir="."):
                     for cert in value:
                         style = "style='background-color: #f8d7da;'" if cert.get('is_problematic') else ""
                         details_html += f"<li {style}>Sujet: {cert.get('sujet')}<br><br>Émetteur: {cert.get('emetteur')}</li>"
-                        details_html += f"<li {style}>Sujet: {cert.get('sujet')}<br>Émetteur: {cert.get('emetteur')}</li>"
                     details_html += "</ul></li>"
                 else:
                     details_html += f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>"
@@ -157,84 +156,7 @@ def generate_html_report(results, hostname, output_dir="."):
 <head>
     <meta charset="UTF-8">
     <title>Rapport de Sécurité - {hostname}</title>
-    <style>
-        body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            color: #333;
-            line-height: 1.6;
-            background-color: #f4f4f9;
-        }}
-        .container {{
-            width: 90%;
-            margin: 0 auto;
-            padding: 20px;
-        }}
-        header {{
-            background-color: #2c3e50;
-            color: white;
-            padding: 20px 0;
-            text-align: center;
-            margin-bottom: 30px;
-        }}
-        h1, h2, h3 {{
-            color: #2c3e50;
-        }}
-        .report-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-        }}
-        .report-group {{
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            padding: 20px;
-            margin-bottom: 20px;
-        }}
-        .grading-table {{
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }}
-        .grading-table th, .grading-table td {{
-            border: 1px solid #ddd;
-            padding: 12px;
-            text-align: left;
-        }}
-        .grading-table th {{
-            background-color: #f8f9fa;
-        }}
-        .grading-table tr:nth-child(even) {{
-            background-color: #f2f2f2;
-        }}
-        .summary {{
-            background-color: #e8f4fc;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }}
-        .score {{
-            font-size: 1.2em;
-            font-weight: bold;
-            color: #007bff;
-        }}
-        .remediation-advice {{
-            background-color: #fff3cd;
-            border-left: 4px solid #ffeeba;
-            padding: 10px;
-            margin-top: 10px;
-        }}
-        footer {{
-            background-color: #2c3e50;
-            color: white;
-            text-align: center;
-            padding: 10px 0;
-            margin-top: 30px;
-        }}
-    </style>
+    <link rel="stylesheet" href="static/style.css">
 </head>
 <body>
     <header>

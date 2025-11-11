@@ -4,7 +4,7 @@
 Module principal pour l'audit de conformité RGPD.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from src.analyzers.cookies import CookieAnalyzer
 
 class GDPRChecker:
@@ -19,7 +19,7 @@ class GDPRChecker:
 
         results = {
             'url': url,
-            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'timestamp': datetime.now().isoformat(),
             'cookies': self.cookie_analyzer.analyze(url),
         }
 
