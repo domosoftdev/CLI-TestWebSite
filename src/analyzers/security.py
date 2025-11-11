@@ -22,7 +22,7 @@ from sslyze import (
     ScanCommandAttemptStatusEnum,
     ServerScanStatusEnum,
 )
-from cryptography.x509.oid import ExtensionOID
+from cryptography.x509.oid import ExtensionOID, NameOID
 from cryptography.x509 import general_name
 from cryptography.hazmat.primitives.asymmetric import rsa, ec
 from sslyze.plugins.scan_commands import ScanCommand
@@ -44,6 +44,11 @@ class SecurityAnalyzer:
     """
     def __init__(self, verbose=False):
         self.verbose = verbose
+
+    def _parse_cert_field(self, cert_field, field_oid):
+        """Extraire une valeur spécifique d'un champ de certificat."""
+        attribute = cert_field.get_attributes_for_oid(field_oid)
+        return attribute[0].value if attribute else "N/A"
 
     def analyze(self, hostname, perform_gdpr_check=False):
         """
@@ -207,13 +212,16 @@ class SecurityAnalyzer:
                 chain_details = []
                 for i, cert in enumerate(deployment.received_certificate_chain):
                     detail = {
-                        "sujet": cert.subject.rfc4514_string(),
-                        "emetteur": cert.issuer.rfc4514_string(),
+                        "issuer_cn": self._parse_cert_field(cert.issuer, NameOID.COMMON_NAME),
+                        "issuer_org": self._parse_cert_field(cert.issuer, NameOID.ORGANIZATION_NAME),
+                        "subject_cn": self._parse_cert_field(cert.subject, NameOID.COMMON_NAME),
+                        "subject_org": self._parse_cert_field(cert.subject, NameOID.ORGANIZATION_NAME),
+                        "issued": cert.not_valid_before_utc.strftime('%b %d, %Y'),
+                        "expires": cert.not_valid_after_utc.strftime('%b %d, %Y'),
                         "is_problematic": False,
                         "explanation": "Ce certificat est valide et approuvé."
                     }
                     # Marquer le dernier certificat comme problématique si la validation a échoué
-                    # et qu'il s'agit bien de la racine du problème.
                     if not validation.was_validation_successful and i == len(deployment.received_certificate_chain) - 1:
                         detail["is_problematic"] = True
                         error_str = str(validation.validation_error)
@@ -223,7 +231,6 @@ class SecurityAnalyzer:
                         else:
                             detail["explanation"] = f"La validation de ce certificat a échoué avec l'erreur : {error_str}"
                             detail["remediation"] = "Vérifiez la validité et la configuration de ce certificat sur le serveur."
-
                     chain_details.append(detail)
                 # Final result construction
                 result_dict = {

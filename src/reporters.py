@@ -71,19 +71,30 @@ def generate_html_report(results, hostname, output_dir="."):
         if 'details' in data:
             for key, value in data['details'].items():
                 if key == 'chaine_de_certificats':
-                    details_html += "<li><strong>Chaîne de certificats:</strong><div class='certificate-chain'>"
-                    for i, cert in enumerate(value):
-                        style = "style='border-left: 5px solid #dc3545;'" if cert.get('is_problematic') else "style='border-left: 5px solid #28a745;'"
-                        details_html += f"""
-                        <div class='certificate-entry' {style}>
-                            <p><strong>Certificat #{i+1}</strong></p>
-                            <p><strong>Sujet:</strong> {cert.get('sujet')}</p>
-                            <p><strong>Émetteur:</strong> {cert.get('emetteur')}</p>
-                            <p><strong>Explication:</strong> {cert.get('explanation')}</p>
-                            {'<p><strong>Remediation:</strong> ' + cert.get('remediation') + '</p>' if cert.get('remediation') else ''}
-                        </div>
-                        """
-                    details_html += "</div></li>"
+                    certs = value
+                    details_html += "<li><strong>Chaîne de certificats:</strong><div class='certificate-table-container'><table>"
+
+                    # Headers
+                    details_html += "<tr>"
+                    for i in range(len(certs)):
+                        details_html += f"<th>Certificat #{i+1}</th>"
+                    details_html += "</tr>"
+
+                    # Rows for each attribute
+                    attributes = [
+                        ("issuer_cn", "Issuer"),
+                        ("subject_cn", "Common Name"),
+                        ("subject_org", "Organization"),
+                        ("issued", "Issued"),
+                        ("expires", "Expires")
+                    ]
+                    for attr_key, attr_name in attributes:
+                        details_html += f"<tr>"
+                        for cert in certs:
+                            details_html += f"<td><strong>{attr_name}:</strong> {cert.get(attr_key, 'N/A')}</td>"
+                        details_html += "</tr>"
+
+                    details_html += "</table></div></li>"
                 else:
                     details_html += f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>"
         details_html += "</ul>"
@@ -237,10 +248,20 @@ def generate_html_report(results, hostname, output_dir="."):
         .certificate-chain {{
             margin-top: 10px;
         }}
-        .certificate-entry {{
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 4px;
+        .certificate-table-container table {{
+            width: 100%;
+            border-collapse: collapse;
+        }}
+        .certificate-table-container th, .certificate-table-container td {{
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }}
+        .certificate-table-container th {{
+            background-color: #f2f2f2;
+        }}
+        .certificate-table-container td strong {{
+            display: block;
         }}
         footer {{
             background-color: #2c3e50;
