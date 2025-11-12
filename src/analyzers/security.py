@@ -22,6 +22,7 @@ from sslyze import (
     ScanCommandAttemptStatusEnum,
     ServerScanStatusEnum,
 )
+from sslyze.errors import ServerHostnameCouldNotBeResolved
 from cryptography.x509.oid import ExtensionOID, NameOID
 from cryptography.x509 import general_name
 from cryptography.hazmat.primitives.asymmetric import rsa, ec
@@ -134,22 +135,22 @@ class SecurityAnalyzer:
         return None
 
     def _check_ssl_certificate(self, hostname):
-        if self.verbose: print(f"  - Vérification du certificat SSL pour {hostname}")
+        if self.verbose:
+            print(f"  - Vérification du certificat SSL pour {hostname}")
         try:
-            server_location = ServerNetworkLocation(hostname=hostname, port=443)
-            network_config = ServerNetworkConfiguration(
-                tls_server_name_indication=hostname, network_timeout=30
-            )
-            # Activer la chasing AIA pour reconstruire la chaîne si elle est incomplète
+            # Setup the scan request
             scan_request = ServerScanRequest(
-                server_location=server_location,
+                server_location=ServerNetworkLocation(hostname=hostname, port=443),
                 scan_commands={ScanCommand.CERTIFICATE_INFO},
-                network_configuration=network_config
             )
+
+            # Queue and retrieve the result
             scanner = Scanner()
             scanner.queue_scans([scan_request])
 
+            # Assuming a single result for simplicity, as we queued a single scan
             for result in scanner.get_results():
+                # Check if the scan was successful
                 if result.scan_status != ServerScanStatusEnum.COMPLETED:
                     return {"statut": "ERROR", "message": "La connexion au serveur a échoué.", "criticite": "HIGH"}
 
@@ -159,12 +160,12 @@ class SecurityAnalyzer:
 
                 cert_info = cert_info_attempt.result
                 if not cert_info.certificate_deployments:
-                    return {"statut": "ERROR", "message": "Aucun certificat reçu.", "criticite": "HIGH"}
+                    return {"statut": "ERROR", "message": "Aucun certificat n'a été reçu du serveur.", "criticite": "HIGH"}
 
+                # Process the certificate information
                 deployment = cert_info.certificate_deployments[0]
                 leaf_cert = deployment.received_certificate_chain[0]
                 validation = deployment.path_validation_results[0]
-
                 verified_chain = validation.verified_certificate_chain or deployment.received_certificate_chain
 
                 points_a_corriger = []
@@ -254,40 +255,56 @@ class SecurityAnalyzer:
                 }
                 return result_dict
 
+        except ServerHostnameCouldNotBeResolved:
+            return {"statut": "ERROR", "message": f"Le nom d'hôte {hostname} ne peut pas être résolu.", "criticite": "HIGH"}
         except Exception as e:
             import traceback
             traceback.print_exc()
             return {"statut": "ERROR", "message": f"Erreur inattendue: {e}", "criticite": "HIGH"}
 
     def _scan_tls_protocols(self, hostname):
-        if self.verbose: print(f"  - Scan des protocoles TLS pour {hostname}")
+        if self.verbose:
+            print(f"  - Scan des protocoles TLS pour {hostname}")
         results = []
         try:
-            server_location = ServerNetworkLocation(hostname=hostname, port=443)
-            network_config = ServerNetworkConfiguration(
-                tls_server_name_indication=hostname, network_timeout=30
-            )
             scan_request = ServerScanRequest(
-                server_location=server_location,
-                scan_commands={ScanCommand.SSL_2_0_CIPHER_SUITES, ScanCommand.SSL_3_0_CIPHER_SUITES, ScanCommand.TLS_1_0_CIPHER_SUITES, ScanCommand.TLS_1_1_CIPHER_SUITES, ScanCommand.TLS_1_2_CIPHER_SUITES, ScanCommand.TLS_1_3_CIPHER_SUITES},
-                network_configuration=network_config
+                server_location=ServerNetworkLocation(hostname=hostname, port=443),
+                scan_commands={
+                    ScanCommand.SSL_2_0_CIPHER_SUITES, ScanCommand.SSL_3_0_CIPHER_SUITES,
+                    ScanCommand.TLS_1_0_CIPHER_SUITES, ScanCommand.TLS_1_1_CIPHER_SUITES,
+                    ScanCommand.TLS_1_2_CIPHER_SUITES, ScanCommand.TLS_1_3_CIPHER_SUITES
+                },
             )
             scanner = Scanner()
             scanner.queue_scans([scan_request])
+
             for result in scanner.get_results():
-                if result.scan_status == ServerScanStatusEnum.ERROR_NO_CONNECTIVITY:
+                if result.scan_status != ServerScanStatusEnum.COMPLETED:
                     return [{"statut": "ERROR", "message": f"Impossible de se connecter à {hostname} pour le scan TLS.", "criticite": "HIGH"}]
-                proto_scans = {"SSL 2.0": result.scan_result.ssl_2_0_cipher_suites, "SSL 3.0": result.scan_result.ssl_3_0_cipher_suites, "TLS 1.0": result.scan_result.tls_1_0_cipher_suites, "TLS 1.1": result.scan_result.tls_1_1_cipher_suites, "TLS 1.2": result.scan_result.tls_1_2_cipher_suites, "TLS 1.3": result.scan_result.tls_1_3_cipher_suites}
-                for name, scan in proto_scans.items():
-                    if scan.status == ScanCommandAttemptStatusEnum.ERROR: continue
-                    if scan.result.accepted_cipher_suites:
-                        crit = "HIGH" if name in ["SSL 2.0", "SSL 3.0", "TLS 1.0", "TLS 1.1"] else "INFO"
-                        res = {"protocole": name, "statut": "ERROR" if crit == "HIGH" else "SUCCESS", "message": "Supporté", "criticite": crit}
-                        if crit == "HIGH": res["remediation_id"] = "TLS_OBSOLETE"
-                        results.append(res)
+
+                proto_scans = {
+                    "SSL 2.0": result.scan_result.ssl_2_0_cipher_suites,
+                    "SSL 3.0": result.scan_result.ssl_3_0_cipher_suites,
+                    "TLS 1.0": result.scan_result.tls_1_0_cipher_suites,
+                    "TLS 1.1": result.scan_result.tls_1_1_cipher_suites,
+                    "TLS 1.2": result.scan_result.tls_1_2_cipher_suites,
+                    "TLS 1.3": result.scan_result.tls_1_3_cipher_suites
+                }
+                for name, scan_attempt in proto_scans.items():
+                    if scan_attempt.status == ScanCommandAttemptStatusEnum.COMPLETED and scan_attempt.result.accepted_cipher_suites:
+                        is_obsolete = name in ["SSL 2.0", "SSL 3.0", "TLS 1.0", "TLS 1.1"]
+                        results.append({
+                            "protocole": name,
+                            "statut": "ERROR" if is_obsolete else "SUCCESS",
+                            "message": "Supporté",
+                            "criticite": "HIGH" if is_obsolete else "INFO",
+                            "remediation_id": "TLS_OBSOLETE" if is_obsolete else None
+                        })
                     else:
                         results.append({"protocole": name, "statut": "SUCCESS", "message": "Non supporté", "criticite": "INFO"})
-                return results
+            return results
+        except ServerHostnameCouldNotBeResolved:
+            return [{"statut": "ERROR", "message": f"Le nom d'hôte {hostname} ne peut pas être résolu.", "criticite": "HIGH"}]
         except Exception as e:
             import traceback
             traceback.print_exc()
