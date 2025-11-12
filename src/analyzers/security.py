@@ -493,7 +493,5 @@ class SecurityAnalyzer:
                 "registrant_org": self._format_whois_value(w.get('org')),
                 "registrant_address": ", ".join(filter(lambda x: x and x != "N/A", registrant_address)) or "N/A",
             }
-        except whois.parser.PywhoisError as e:
+        except Exception as e:
             return {"statut": "ERROR", "message": f"Impossible de récupérer les informations WHOIS : {e}", "criticite": "LOW"}
-        except ConnectionResetError:
-            return {"statut": "ERROR", "message": "La connexion avec le serveur WHOIS a été réinitialisée.", "criticite": "LOW"}
