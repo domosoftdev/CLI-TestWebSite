@@ -55,6 +55,15 @@ def generate_html_report(results, hostname, output_dir="."):
     score = results.get('score_final', 0)
     grade = results.get('note', 'N/A')
 
+    # Read CSS content to embed it in the report for portability
+    css_content = ""
+    try:
+        # This path is relative to the project root, where the script is expected to run
+        with open('static/style.css', 'r', encoding='utf-8') as f:
+            css_content = f.read()
+    except FileNotFoundError:
+        print("⚠️ Avertissement : Le fichier static/style.css n'a pas été trouvé. Le rapport ne sera pas stylisé.")
+
     def get_remediation_html(item_data):
         remediation_id = item_data.get('remediation_id')
         if remediation_id and remediation_id in REMEDIATION_ADVICE:
@@ -186,7 +195,9 @@ def generate_html_report(results, hostname, output_dir="."):
 <head>
     <meta charset="UTF-8">
     <title>Rapport de Sécurité - {hostname}</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        {css_content}
+    </style>
 </head>
 <body>
     <header>
