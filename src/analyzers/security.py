@@ -127,69 +127,115 @@ class SecurityAnalyzer:
     def _check_ssl_certificate(self, hostname):
         if self.verbose:
             print(f"  - Vérification du certificat SSL pour {hostname}")
+
+        final_chain = []
+        validation_error = None
+
+        # First connection, no validation, to get the chain
         try:
-            context = ssl.create_default_context()
+            context_no_verify = ssl.create_default_context()
+            context_no_verify.check_hostname = False
+            context_no_verify.verify_mode = ssl.CERT_NONE
+
             with socket.create_connection((hostname, 443), timeout=10) as sock:
-                with context.wrap_socket(sock, server_hostname=hostname) as ssock:
-                    cert_der = ssock.getpeercert(True)
-
-            leaf_cert = load_der_x509_certificate(cert_der)
-            points_a_corriger = []
-            now = datetime.now(timezone.utc)
-
-            # Temporal Validity
-            if leaf_cert.not_valid_after_utc < now:
-                points_a_corriger.append({"message": "Le certificat a expiré.", "criticite": "CRITICAL"})
-            else:
-                jours_restants = (leaf_cert.not_valid_after_utc - now).days
-                if jours_restants < 30:
-                    points_a_corriger.append({"message": f"Le certificat expire bientôt (dans {jours_restants} jours).", "criticite": "LOW"})
-
-            # Crypto Strength
-            public_key = leaf_cert.public_key()
-            key_info = "Inconnu"
-            if isinstance(public_key, rsa.RSAPublicKey):
-                key_info = f"RSA {public_key.key_size} bits"
-                if public_key.key_size < 2048:
-                    points_a_corriger.append({"message": f"La taille de la clé RSA ({public_key.key_size} bits) est inférieure au minimum recommandé de 2048 bits.", "criticite": "HIGH"})
-            elif isinstance(public_key, ec.EllipticCurvePublicKey):
-                key_info = f"ECDSA {public_key.curve.name} ({public_key.curve.key_size} bits)"
-                if public_key.curve.key_size < 256:
-                        points_a_corriger.append({"message": f"La taille de la clé ECDSA ({public_key.curve.key_size} bits) est inférieure au minimum recommandé de 256 bits.", "criticite": "HIGH"})
-
-            sig_algo = leaf_cert.signature_hash_algorithm.name if leaf_cert.signature_hash_algorithm else "inconnu"
-            if sig_algo.lower() in ['md5', 'sha1']:
-                    points_a_corriger.append({"message": f"L'algorithme de signature ({sig_algo}) est faible et obsolète.", "criticite": "HIGH"})
-
-            # Final result construction
-            result_dict = {
-                "statut": "SUCCESS",
-                "message": "Analyse du certificat terminée.",
-                "criticite": "INFO",
-                "points_a_corriger": points_a_corriger,
-                "details": {
-                    "date_expiration": leaf_cert.not_valid_after_utc.strftime('%Y-%m-%d'),
-                    "jours_restants": (leaf_cert.not_valid_after_utc - now).days,
-                    "noms_alternatifs_sujet (SAN)": [name for name in leaf_cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value.get_values_for_type(general_name.DNSName)],
-                    "force_cle_publique": key_info,
-                    "algorithme_signature": sig_algo,
-                }
-            }
-            return result_dict
-
-        except ssl.SSLCertVerificationError as e:
-            if "unable to get local issuer certificate" in str(e):
-                return {"statut": "ERROR", "message": "La chaîne de certificats est incomplète ou non fiable.", "criticite": "HIGH", "points_a_corriger": [{"message": "Impossible de vérifier le certificat local de l'émetteur. La chaîne de confiance est probablement incomplète.", "criticite": "HIGH", "remediation_id": "SSL_CHAIN_INCOMPLETE"}]}
-            else:
-                return {"statut": "ERROR", "message": f"Erreur de vérification du certificat SSL: {e}", "criticite": "HIGH"}
-        except socket.gaierror:
-            return {"statut": "ERROR", "message": f"Le nom d'hôte {hostname} ne peut pas être résolu.", "criticite": "HIGH"}
-        except socket.timeout:
-            return {"statut": "ERROR", "message": "Timeout lors de la connexion au serveur.", "criticite": "HIGH"}
+                with context_no_verify.wrap_socket(sock, server_hostname=hostname) as ssock:
+                    # _get_server_certificate_chain is not a documented API, but it's the simplest way to get the chain
+                    chain_ders = ssock._get_server_certificate_chain()
+                    final_chain = [load_der_x509_certificate(cert_der) for cert_der in chain_ders]
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return {"statut": "ERROR", "message": f"Erreur inattendue lors de la vérification SSL: {e}", "criticite": "HIGH"}
+            # Fallback for if the undocumented method fails
+            try:
+                cert_der = ssl.get_server_certificate((hostname, 443), ssl_context=context_no_verify)
+                final_chain = [load_der_x509_certificate(ssl.PEM_cert_to_DER_cert(cert_der))]
+            except Exception as e:
+                 return {"statut": "ERROR", "message": f"Impossible de récupérer le certificat du serveur: {e}", "criticite": "HIGH"}
+
+
+        # Second connection, with validation, to check for errors
+        try:
+            context_verify = ssl.create_default_context()
+            with socket.create_connection((hostname, 443), timeout=10) as sock:
+                with context_verify.wrap_socket(sock, server_hostname=hostname) as ssock:
+                    pass # Connection successful, so chain is valid
+        except ssl.SSLCertVerificationError as e:
+            validation_error = e
+        except Exception as e:
+            return {"statut": "ERROR", "message": f"Erreur de connexion SSL: {e}", "criticite": "HIGH"}
+
+
+        if not final_chain:
+            return {"statut": "ERROR", "message": "Aucun certificat reçu.", "criticite": "HIGH"}
+
+        leaf_cert = final_chain[0]
+        points_a_corriger = []
+        now = datetime.now(timezone.utc)
+
+        # Chain of Trust
+        if validation_error:
+            if "unable to get local issuer certificate" in str(validation_error):
+                points_a_corriger.append({"message": "La chaîne de certificats est incomplète. Le serveur ne fournit probablement pas tous les certificats intermédiaires.", "criticite": "MEDIUM", "remediation_id": "SSL_CHAIN_INCOMPLETE"})
+            else:
+                points_a_corriger.append({"message": f"La chaîne de certificats n'est pas fiable: {validation_error}", "criticite": "HIGH", "remediation_id": "SSL_CHAIN_UNTRUSTED"})
+
+        # Temporal Validity
+        jours_restants = (leaf_cert.not_valid_after_utc - now).days
+        if jours_restants < 0:
+            points_a_corriger.append({"message": "Le certificat a expiré.", "criticite": "CRITICAL"})
+        elif jours_restants < 30:
+            points_a_corriger.append({"message": f"Le certificat expire bientôt (dans {jours_restants} jours).", "criticite": "LOW"})
+
+        # Crypto Strength
+        public_key = leaf_cert.public_key()
+        key_info = "Inconnu"
+        if isinstance(public_key, rsa.RSAPublicKey):
+            key_info = f"RSA {public_key.key_size} bits"
+            if public_key.key_size < 2048:
+                points_a_corriger.append({"message": f"La taille de la clé RSA ({public_key.key_size} bits) est inférieure au minimum recommandé de 2048 bits.", "criticite": "HIGH"})
+        elif isinstance(public_key, ec.EllipticCurvePublicKey):
+            key_info = f"ECDSA {public_key.curve.name} ({public_key.curve.key_size} bits)"
+            if public_key.curve.key_size < 256:
+                points_a_corriger.append({"message": f"La taille de la clé ECDSA ({public_key.curve.key_size} bits) est inférieure au minimum recommandé de 256 bits.", "criticite": "HIGH"})
+
+        sig_algo = leaf_cert.signature_hash_algorithm.name if leaf_cert.signature_hash_algorithm else "inconnu"
+        if sig_algo.lower() in ['md5', 'sha1']:
+            points_a_corriger.append({"message": f"L'algorithme de signature ({sig_algo}) est faible et obsolète.", "criticite": "HIGH"})
+
+        # Build detailed chain for reporting
+        chain_details = []
+        for i, cert in enumerate(final_chain):
+            is_problematic = (i == len(final_chain) - 1 and validation_error is not None)
+            explanation = "Ce certificat est valide et approuvé."
+            if is_problematic:
+                if "unable to get local issuer certificate" in str(validation_error):
+                    explanation = "Ce certificat intermédiaire n'est pas approuvé par une autorité de certification racine connue. La chaîne est probablement incomplète."
+                else:
+                    explanation = f"La validation de ce certificat a échoué : {validation_error}"
+
+            chain_details.append({
+                "issuer_cn": self._parse_cert_field(cert.issuer, NameOID.COMMON_NAME),
+                "issuer_org": self._parse_cert_field(cert.issuer, NameOID.ORGANIZATION_NAME),
+                "subject_cn": self._parse_cert_field(cert.subject, NameOID.COMMON_NAME),
+                "subject_org": self._parse_cert_field(cert.subject, NameOID.ORGANIZATION_NAME),
+                "issued": cert.not_valid_before_utc.strftime('%b %d, %Y'),
+                "expires": cert.not_valid_after_utc.strftime('%b %d, %Y'),
+                "is_problematic": is_problematic,
+                "explanation": explanation
+            })
+
+        return {
+            "statut": "SUCCESS" if not points_a_corriger else "WARNING",
+            "message": "Analyse du certificat terminée.",
+            "criticite": "INFO",
+            "points_a_corriger": points_a_corriger,
+            "details": {
+                "date_expiration": leaf_cert.not_valid_after_utc.strftime('%Y-%m-%d'),
+                "jours_restants": jours_restants,
+                "noms_alternatifs_sujet (SAN)": [name for name in leaf_cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value.get_values_for_type(general_name.DNSName)],
+                "chaine_de_certificats": chain_details,
+                "force_cle_publique": key_info,
+                "algorithme_signature": sig_algo,
+            }
+        }
 
     def _scan_tls_protocols(self, hostname):
         if self.verbose:
@@ -327,8 +373,8 @@ class SecurityAnalyzer:
             return results
         except requests.exceptions.SSLError:
             if ssl_cert_result and ssl_cert_result.get('points_a_corriger'):
-                return {"statut": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié.", "criticite": "INFO"}
-            return {"statut": "ERROR", "message": "Erreur SSL lors de la connexion.", "criticite": "HIGH"}
+                return [{"statut": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié.", "criticite": "INFO"}]
+            return [{"statut": "ERROR", "message": "Erreur SSL lors de la connexion.", "criticite": "HIGH"}]
         except requests.exceptions.RequestException as e:
             return {"statut": "ERROR", "message": f"Erreur lors de la récupération des en-têtes: {e}", "criticite": "HIGH"}
 
@@ -340,8 +386,8 @@ class SecurityAnalyzer:
             return {"statut": "INFO", "message": "Aucune balise meta 'generator' trouvée.", "criticite": "INFO"}
         except requests.exceptions.SSLError:
             if ssl_cert_result and ssl_cert_result.get('points_a_corriger'):
-                return {"statut": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié.", "criticite": "INFO"}
-            return {"statut": "ERROR", "message": "Erreur SSL lors de la connexion.", "criticite": "HIGH"}
+                return [{"statut": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié.", "criticite": "INFO"}]
+            return [{"statut": "ERROR", "message": "Erreur SSL lors de la connexion.", "criticite": "HIGH"}]
         except requests.exceptions.RequestException as e:
             return {"statut": "ERROR", "message": f"Erreur lors de l'analyse CMS: {e}", "criticite": "HIGH"}
 
