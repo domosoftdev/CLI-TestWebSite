@@ -145,7 +145,7 @@ class SecurityAnalyzer:
         except Exception as e:
             # Fallback for if the undocumented method fails
             try:
-                cert_der = ssl.get_server_certificate((hostname, 443))
+                cert_der = ssl.get_server_certificate((hostname, 443), ssl_context=context_no_verify)
                 final_chain = [load_der_x509_certificate(ssl.PEM_cert_to_DER_cert(cert_der))]
             except Exception as e:
                  return {"statut": "ERROR", "message": f"Impossible de récupérer le certificat du serveur: {e}", "criticite": "HIGH"}
@@ -373,8 +373,8 @@ class SecurityAnalyzer:
             return results
         except requests.exceptions.SSLError:
             if ssl_cert_result and ssl_cert_result.get('points_a_corriger'):
-                return [{"statut": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié.", "criticite": "INFO"}]
-            return [{"statut": "ERROR", "message": "Erreur SSL lors de la connexion.", "criticite": "HIGH"}]
+                return {"statut": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié.", "criticite": "INFO"}
+            return {"statut": "ERROR", "message": "Erreur SSL lors de la connexion.", "criticite": "HIGH"}
         except requests.exceptions.RequestException as e:
             return {"statut": "ERROR", "message": f"Erreur lors de la récupération des en-têtes: {e}", "criticite": "HIGH"}
 
@@ -386,8 +386,8 @@ class SecurityAnalyzer:
             return {"statut": "INFO", "message": "Aucune balise meta 'generator' trouvée.", "criticite": "INFO"}
         except requests.exceptions.SSLError:
             if ssl_cert_result and ssl_cert_result.get('points_a_corriger'):
-                return [{"statut": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié.", "criticite": "INFO"}]
-            return [{"statut": "ERROR", "message": "Erreur SSL lors de la connexion.", "criticite": "HIGH"}]
+                return {"statut": "INFO", "message": "Analyse sautée à cause d'un problème de configuration SSL déjà identifié.", "criticite": "INFO"}
+            return {"statut": "ERROR", "message": "Erreur SSL lors de la connexion.", "criticite": "HIGH"}
         except requests.exceptions.RequestException as e:
             return {"statut": "ERROR", "message": f"Erreur lors de l'analyse CMS: {e}", "criticite": "HIGH"}
 
