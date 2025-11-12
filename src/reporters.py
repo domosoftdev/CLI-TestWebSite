@@ -116,6 +116,10 @@ def generate_html_report(results, hostname, output_dir="."):
         return rows
 
     def render_security_headers(data):
+        # If data is not the expected dict, it's likely an error message.
+        if not isinstance(data, dict) or 'en-tetes_securite' not in data:
+            return render_generic(data)
+
         rows = ""
         for header, header_data in data.get('en-tetes_securite', {}).items():
             rows += f"<tr><td>{header}</td><td>{header_data.get('statut')}</td><td>{get_remediation_html(header_data)}</td></tr>"
