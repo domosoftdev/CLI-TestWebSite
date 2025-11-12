@@ -195,27 +195,41 @@ class SecurityAnalyzer:
         if self.verbose:
             print(f"  - Scan des protocoles TLS pour {hostname}")
         results = []
-        protocols = {
-            "SSLv2": ssl.PROTOCOL_SSLv2,
-            "SSLv3": ssl.PROTOCOL_SSLv3,
-            "TLSv1": ssl.PROTOCOL_TLSv1,
-            "TLSv1.1": ssl.PROTOCOL_TLSv1_1,
-            "TLSv1.2": ssl.PROTOCOL_TLSv1_2,
+
+        # Define protocols and check for their existence in the ssl module
+        protocol_definitions = {
+            "SSLv2": "PROTOCOL_SSLv2",
+            "SSLv3": "PROTOCOL_SSLv3",
+            "TLSv1": "PROTOCOL_TLSv1",
+            "TLSv1.1": "PROTOCOL_TLSv1_1",
+            "TLSv1.2": "PROTOCOL_TLSv1_2",
         }
-        for name, proto in protocols.items():
+
+        for name, attr_name in protocol_definitions.items():
+            if not hasattr(ssl, attr_name):
+                # Protocol is not supported by this Python version, mark as not supported
+                results.append({"protocole": name, "statut": "SUCCESS", "message": "Non supporté (obsolète)", "criticite": "INFO"})
+                continue
+
+            proto = getattr(ssl, attr_name)
             try:
                 context = ssl.SSLContext(proto)
-                with socket.create_connection((hostname, 443)) as sock:
+                with socket.create_connection((hostname, 443), timeout=5) as sock:
                     with context.wrap_socket(sock, server_hostname=hostname) as ssock:
-                        crit = "HIGH" if name in ["SSLv2", "SSLv3", "TLSv1", "TLSv1.1"] else "INFO"
-                        res = {"protocole": name, "statut": "ERROR" if crit == "HIGH" else "SUCCESS", "message": "Supporté", "criticite": crit}
-                        if crit == "HIGH":
-                            res["remediation_id"] = "TLS_OBSOLETE"
-                        results.append(res)
-            except ssl.SSLError:
+                        is_obsolete = name in ["SSLv2", "SSLv3", "TLSv1", "TLSv1.1"]
+                        results.append({
+                            "protocole": name,
+                            "statut": "ERROR" if is_obsolete else "SUCCESS",
+                            "message": "Supporté",
+                            "criticite": "HIGH" if is_obsolete else "INFO",
+                            "remediation_id": "TLS_OBSOLETE" if is_obsolete else None,
+                        })
+            except ssl.SSLError as e:
+                # This usually means the protocol is not supported by the server
                 results.append({"protocole": name, "statut": "SUCCESS", "message": "Non supporté", "criticite": "INFO"})
-            except Exception:
-                results.append({"protocole": name, "statut": "ERROR", "message": "Impossible de tester", "criticite": "HIGH"})
+            except Exception as e:
+                results.append({"protocole": name, "statut": "ERROR", "message": f"Impossible de tester ({type(e).__name__})", "criticite": "HIGH"})
+
         return results
 
     def _check_http_to_https_redirect(self, hostname):
