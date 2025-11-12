@@ -129,16 +129,15 @@ class SecurityAnalyzer:
             print(f"  - Vérification du certificat SSL pour {hostname}")
         try:
             context = ssl.create_default_context()
-            with socket.create_connection((hostname, 443)) as sock:
+            with socket.create_connection((hostname, 443), timeout=10) as sock:
                 with context.wrap_socket(sock, server_hostname=hostname) as ssock:
                     cert_der = ssock.getpeercert(True)
 
             leaf_cert = load_der_x509_certificate(cert_der)
-
             points_a_corriger = []
-
-            # 2. Temporal Validity
             now = datetime.now(timezone.utc)
+
+            # Temporal Validity
             if leaf_cert.not_valid_after_utc < now:
                 points_a_corriger.append({"message": "Le certificat a expiré.", "criticite": "CRITICAL"})
             else:
@@ -146,7 +145,7 @@ class SecurityAnalyzer:
                 if jours_restants < 30:
                     points_a_corriger.append({"message": f"Le certificat expire bientôt (dans {jours_restants} jours).", "criticite": "LOW"})
 
-            # 3. Crypto Strength
+            # Crypto Strength
             public_key = leaf_cert.public_key()
             key_info = "Inconnu"
             if isinstance(public_key, rsa.RSAPublicKey):
@@ -156,11 +155,11 @@ class SecurityAnalyzer:
             elif isinstance(public_key, ec.EllipticCurvePublicKey):
                 key_info = f"ECDSA {public_key.curve.name} ({public_key.curve.key_size} bits)"
                 if public_key.curve.key_size < 256:
-                     points_a_corriger.append({"message": f"La taille de la clé ECDSA ({public_key.curve.key_size} bits) est inférieure au minimum recommandé de 256 bits.", "criticite": "HIGH"})
+                        points_a_corriger.append({"message": f"La taille de la clé ECDSA ({public_key.curve.key_size} bits) est inférieure au minimum recommandé de 256 bits.", "criticite": "HIGH"})
 
             sig_algo = leaf_cert.signature_hash_algorithm.name if leaf_cert.signature_hash_algorithm else "inconnu"
             if sig_algo.lower() in ['md5', 'sha1']:
-                 points_a_corriger.append({"message": f"L'algorithme de signature ({sig_algo}) est faible et obsolète.", "criticite": "HIGH"})
+                    points_a_corriger.append({"message": f"L'algorithme de signature ({sig_algo}) est faible et obsolète.", "criticite": "HIGH"})
 
             # Final result construction
             result_dict = {
@@ -178,12 +177,19 @@ class SecurityAnalyzer:
             }
             return result_dict
 
-        except ServerHostnameCouldNotBeResolved:
+        except ssl.SSLCertVerificationError as e:
+            if "unable to get local issuer certificate" in str(e):
+                return {"statut": "ERROR", "message": "La chaîne de certificats est incomplète ou non fiable.", "criticite": "HIGH", "points_a_corriger": [{"message": "Impossible de vérifier le certificat local de l'émetteur. La chaîne de confiance est probablement incomplète.", "criticite": "HIGH", "remediation_id": "SSL_CHAIN_INCOMPLETE"}]}
+            else:
+                return {"statut": "ERROR", "message": f"Erreur de vérification du certificat SSL: {e}", "criticite": "HIGH"}
+        except socket.gaierror:
             return {"statut": "ERROR", "message": f"Le nom d'hôte {hostname} ne peut pas être résolu.", "criticite": "HIGH"}
+        except socket.timeout:
+            return {"statut": "ERROR", "message": "Timeout lors de la connexion au serveur.", "criticite": "HIGH"}
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return {"statut": "ERROR", "message": f"Erreur inattendue: {e}", "criticite": "HIGH"}
+            return {"statut": "ERROR", "message": f"Erreur inattendue lors de la vérification SSL: {e}", "criticite": "HIGH"}
 
     def _scan_tls_protocols(self, hostname):
         if self.verbose:
