@@ -8,39 +8,37 @@ Accueil - Analyseur de Sécurité Web
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
-          <div class="alert alert-{{ category }}">{{ message }}</div>
+          <div class="summary">{{ message }}</div>
         {% endfor %}
       {% endif %}
     {% endwith %}
 
-    <h1>Analyseur de Sécurité Web</h1>
-
-    <div id="scan-form-container" style="margin-bottom: 2em;">
+    <div class="report-group">
         <h2>Lancer un nouveau scan</h2>
         <form action="/scan" method="post">
             <label for="domain">Domaine à analyser :</label>
-            <input type="text" id="domain" name="domain" required placeholder="exemple.com" size="30" style="padding: 5px;">
-            <button type="submit" style="padding: 5px 10px;">Lancer le Scan</button>
+            <input type="text" id="domain" name="domain" required placeholder="exemple.com" size="30">
+            <button type="submit">Lancer le Scan</button>
         </form>
     </div>
 
-    <div id="results-container">
+    <div class="report-group">
         <h2>Rapports Existants</h2>
         {% if reports %}
-            <table style="width: 100%; border-collapse: collapse;">
+            <table class="grading-table">
                 <thead>
-                    <tr style="background-color: #f2f2f2;">
-                        <th style="padding: 8px; border: 1px solid #ddd;">Domaine</th>
-                        <th style="padding: 8px; border: 1px solid #ddd;">Date du Scan</th>
-                        <th style="padding: 8px; border: 1px solid #ddd;">Action</th>
+                    <tr>
+                        <th>Domaine</th>
+                        <th>Date du Scan</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for report in reports %}
                         <tr>
-                            <td style="padding: 8px; border: 1px solid #ddd;">{{ report.hostname }}</td>
-                            <td style="padding: 8px; border: 1px solid #ddd;">{{ report.date }}</td>
-                            <td style="padding: 8px; border: 1px solid #ddd;"><a href="{{ url_for('serve_report', filename=report.path) }}" target="_blank">Voir le Rapport</a></td>
+                            <td>{{ report.hostname }}</td>
+                            <td>{{ report.date }}</td>
+                            <td><a href="{{ url_for('serve_report', filename=report.path) }}" target="_blank">Voir le Rapport</a></td>
                         </tr>
                     {% endfor %}
                 </tbody>
