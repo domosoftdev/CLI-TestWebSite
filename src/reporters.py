@@ -63,6 +63,10 @@ def generate_html_report(results, hostname, output_dir="."):
         return ""
 
     def render_ssl_certificate(data):
+        # If data is not the expected dict, it's likely an error message from the scan.
+        if not isinstance(data, dict) or 'details' not in data:
+            return render_generic(data)
+
         rows = ""
         for point in data.get('points_a_corriger', []):
             rows += f"<tr><td>{point.get('criticite')}</td><td>{point.get('message')}</td><td>{get_remediation_html(point)}</td></tr>"
