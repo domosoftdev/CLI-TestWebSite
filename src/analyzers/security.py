@@ -145,7 +145,7 @@ class SecurityAnalyzer:
         except Exception as e:
             # Fallback for if the undocumented method fails
             try:
-                cert_der = ssl.get_server_certificate((hostname, 443), ssl_context=context_no_verify)
+                cert_der = ssl.get_server_certificate((hostname, 443))
                 final_chain = [load_der_x509_certificate(ssl.PEM_cert_to_DER_cert(cert_der))]
             except Exception as e:
                  return {"statut": "ERROR", "message": f"Impossible de récupérer le certificat du serveur: {e}", "criticite": "HIGH"}
