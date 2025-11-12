@@ -60,7 +60,7 @@ def scan():
 
 @app.route('/reports/<path:filename>')
 def serve_report(filename):
-    return send_from_directory('scans', filename, cache_timeout=0)
+    return send_from_directory('scans', filename)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)
