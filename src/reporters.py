@@ -88,7 +88,7 @@ def generate_html_report(results, hostname, output_dir="."):
                     details_html += "<li><strong>Chaîne de certificats:</strong><div class='certificate-table-container'><table>"
 
                     # Headers
-                    details_html += "<tr>"
+                    details_html += "<tr><th>Attribut</th>"
                     for i in range(len(certs)):
                         details_html += f"<th>Certificat #{i+1}</th>"
                     details_html += "</tr>"
