@@ -86,16 +86,19 @@ def generate_html_report(results, hostname, output_dir="."):
 
                     # Rows for each attribute
                     attributes = [
-                        ("issuer_cn", "Issuer"),
-                        ("subject_cn", "Common Name"),
-                        ("subject_org", "Organization"),
-                        ("issued", "Issued"),
-                        ("expires", "Expires")
+                        ("subject_cn", "Sujet"),
+                        ("issuer_cn", "Émetteur"),
+                        ("issued", "Délivré le"),
+                        ("expires", "Expire le"),
+                        ("explanation", "Statut")
                     ]
+
                     for attr_key, attr_name in attributes:
-                        details_html += f"<tr>"
+                        details_html += f"<tr><td><strong>{attr_name}</strong></td>"
                         for cert in certs:
-                            details_html += f"<td><strong>{attr_name}:</strong> {cert.get(attr_key, 'N/A')}</td>"
+                            is_problematic = cert.get('is_problematic', False) and attr_key == 'explanation'
+                            cell_style = " style='background-color: #ffebee; color: #c62828;'" if is_problematic else ""
+                            details_html += f"<td{cell_style}>{cert.get(attr_key, 'N/A')}</td>"
                         details_html += "</tr>"
 
                     details_html += "</table></div></li>"
