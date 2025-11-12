@@ -178,6 +178,8 @@ class SecurityAnalyzer:
             }
             return result_dict
 
+        except ServerHostnameCouldNotBeResolved:
+            return {"statut": "ERROR", "message": f"Le nom d'hôte {hostname} ne peut pas être résolu.", "criticite": "HIGH"}
         except Exception as e:
             import traceback
             traceback.print_exc()
