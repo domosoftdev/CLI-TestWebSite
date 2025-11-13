@@ -139,9 +139,28 @@ class SecurityAnalyzer:
 
             with socket.create_connection((hostname, 443), timeout=10) as sock:
                 with context_no_verify.wrap_socket(sock, server_hostname=hostname) as ssock:
-                    # _get_server_certificate_chain is not a documented API, but it's the simplest way to get the chain
-                    chain_ders = ssock._get_server_certificate_chain()
-                    final_chain = [load_der_x509_certificate(cert_der) for cert_der in chain_ders]
+                    cert_der = ssock.getpeercert(True)
+                    leaf_cert = load_der_x509_certificate(cert_der)
+                    final_chain.append(leaf_cert)
+
+                    # Attempt to build the chain using AIA extension
+                    try:
+                        aia = leaf_cert.extensions.get_extension_for_oid(ExtensionOID.AUTHORITY_INFORMATION_ACCESS)
+                        for desc in aia.value:
+                            if desc.access_method == general_name.OCSP_RESPONDER:
+                                continue
+                            if desc.access_method == general_name.CA_ISSUERS:
+                                issuer_url = desc.access_location.value
+                                if issuer_url.startswith('http://'):
+                                    try:
+                                        res = requests.get(issuer_url, timeout=5)
+                                        if res.ok and res.content:
+                                            issuer_cert = load_der_x509_certificate(res.content)
+                                            final_chain.append(issuer_cert)
+                                    except requests.RequestException:
+                                        continue
+                    except Exception:
+                        pass # AIA extension not present or failed
         except Exception as e:
             # Fallback for if the undocumented method fails
             try:
