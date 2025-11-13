@@ -162,7 +162,12 @@ class SecurityAnalyzer:
                     except Exception:
                         pass # AIA extension not present or failed
         except Exception as e:
-             return {"statut": "ERROR", "message": f"Impossible de récupérer le certificat du serveur: {e}", "criticite": "HIGH"}
+            # Fallback for if the undocumented method fails
+            try:
+                cert_der = ssl.get_server_certificate((hostname, 443), ssl_context=context_no_verify)
+                final_chain = [load_der_x509_certificate(ssl.PEM_cert_to_DER_cert(cert_der))]
+            except Exception as e:
+                 return {"statut": "ERROR", "message": f"Impossible de récupérer le certificat du serveur: {e}", "criticite": "HIGH"}
 
 
         # Second connection, with validation, to check for errors
