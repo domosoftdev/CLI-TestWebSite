@@ -4,7 +4,68 @@ import json
 import csv
 import copy
 from datetime import datetime, timezone
+import matplotlib.pyplot as plt
+import io
+import base64
 from .config import REMEDIATION_ADVICE
+
+def generate_score_pie_chart(score, grade):
+    """Génère un graphique en camembert pour le score et retourne une image encodée en Base64."""
+    colors = {
+        'A': '#28a745', 'B': '#fd7e14', 'C': '#ffc107',
+        'D': '#dc3545', 'E': '#dc3545', 'F': '#dc3545'
+    }
+    grade_color = colors.get(grade, '#6c757d')
+
+    fig, ax = plt.subplots(figsize=(1, 1), dpi=100)
+    ax.set_aspect('equal')
+
+    # Données pour le camembert
+    values = [score, 100 - score]
+    ax.pie(values, colors=[grade_color, '#e9ecef'], startangle=90, wedgeprops=dict(width=0.3))
+
+    # Ajoute la note au centre
+    ax.text(0, 0, grade, ha='center', va='center', fontsize=20, fontweight='bold', color=grade_color)
+
+    # Sauvegarde du graphique dans un buffer en mémoire
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', transparent=True)
+    buf.seek(0)
+    plt.close(fig)
+
+    # Encodage de l'image en Base64
+    return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+def get_critical_issues_summary(results):
+    """Extrait les deux premiers problèmes critiques (statut ERROR) pour le résumé."""
+    critical_issues = []
+
+    def find_errors(data):
+        if len(critical_issues) >= 2:
+            return
+
+        if isinstance(data, dict):
+            # Cas spécial pour les certificats SSL qui ont une structure différente
+            if 'points_a_corriger' in data:
+                for point in data['points_a_corriger']:
+                    if point.get('criticite') in ['HIGH', 'CRITICAL']:
+                         critical_issues.append(point.get('message'))
+                         if len(critical_issues) >= 2: return
+            # Cas général pour les autres catégories
+            elif data.get('statut') == 'ERROR':
+                message = data.get('message')
+                if message and message not in critical_issues:
+                    critical_issues.append(message)
+
+            for key, value in data.items():
+                find_errors(value)
+
+        elif isinstance(data, list):
+            for item in data:
+                find_errors(item)
+
+    find_errors(results)
+    return "; ".join(critical_issues)
 
 def generate_json_report(results, hostname, output_dir="."):
     os.makedirs(output_dir, exist_ok=True)
@@ -88,7 +149,7 @@ def generate_html_report(results, hostname, output_dir="."):
                     details_html += "<li><strong>Chaîne de certificats:</strong><div class='certificate-table-container'><table>"
 
                     # Headers
-                    details_html += "<tr><th>Attribut</th>"
+                    details_html += "<tr>"
                     for i in range(len(certs)):
                         details_html += f"<th>Certificat #{i+1}</th>"
                     details_html += "</tr>"
@@ -204,13 +265,14 @@ def generate_html_report(results, hostname, output_dir="."):
         <h1>Rapport de Sécurité - {hostname}</h1>
     </header>
     <div class="container">
-        <div class="report-header">
-            <div class="header-main">
-                <h2>Résumé de l'analyse</h2>
-                <p>Date de l'analyse: {datetime.now().strftime('%d/%m/%Y')}</p>
+        <div class="score-summary-card">
+            <div class="chart">
+                <img src="data:image/png;base64,{generate_score_pie_chart(score, grade)}" alt="Score: {grade}" />
             </div>
-            <div class="header-sidebar">
-                <div class="score">Score de sécurité : {grade}</div>
+            <div class="details">
+                <h2>Score global</h2>
+                <div class="score-display">{grade} — {int(score)}%</div>
+                <div class="issues">{get_critical_issues_summary(results)}</div>
             </div>
         </div>
 

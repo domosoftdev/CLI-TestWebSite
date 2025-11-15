@@ -92,3 +92,34 @@ footer {
     padding: 10px 0;
     margin-top: 30px;
 }
+
+.score-summary-card {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    padding: 20px;
+    margin-bottom: 30px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+.score-summary-card .chart {
+    width: 100px;
+    height: 100px;
+}
+.score-summary-card .details h2 {
+    margin-top: 0;
+    font-size: 1.2em;
+    color: #555;
+    font-weight: normal;
+}
+.score-summary-card .details .score-display {
+    font-size: 2em;
+    font-weight: bold;
+    color: #2c3e50;
+    margin-bottom: 5px;
+}
+.score-summary-card .details .issues {
+    font-size: 0.9em;
+    color: #666;
+}
