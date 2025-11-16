@@ -20,20 +20,16 @@ def generate_score_pie_chart(score, grade):
     fig, ax = plt.subplots(figsize=(1, 1), dpi=100)
     ax.set_aspect('equal')
 
-    # Données pour le camembert
     values = [score, 100 - score]
     ax.pie(values, colors=[grade_color, '#e9ecef'], startangle=90, wedgeprops=dict(width=0.3))
 
-    # Ajoute la note au centre
     ax.text(0, 0, grade, ha='center', va='center', fontsize=20, fontweight='bold', color=grade_color)
 
-    # Sauvegarde du graphique dans un buffer en mémoire
     buf = io.BytesIO()
     fig.savefig(buf, format='png', transparent=True)
     buf.seek(0)
     plt.close(fig)
 
-    # Encodage de l'image en Base64
     return base64.b64encode(buf.getvalue()).decode('utf-8')
 
 def get_critical_issues_summary(results):
@@ -45,13 +41,11 @@ def get_critical_issues_summary(results):
             return
 
         if isinstance(data, dict):
-            # Cas spécial pour les certificats SSL qui ont une structure différente
             if 'points_a_corriger' in data:
                 for point in data['points_a_corriger']:
                     if point.get('criticite') in ['HIGH', 'CRITICAL']:
                          critical_issues.append(point.get('message'))
                          if len(critical_issues) >= 2: return
-            # Cas général pour les autres catégories
             elif data.get('statut') == 'ERROR':
                 message = data.get('message')
                 if message and message not in critical_issues:
@@ -116,15 +110,6 @@ def generate_html_report(results, hostname, output_dir="."):
     score = results.get('score_final', 0)
     grade = results.get('note', 'N/A')
 
-    # Read CSS content to embed it in the report for portability
-    css_content = ""
-    try:
-        # This path is relative to the project root, where the script is expected to run
-        with open('static/style.css', 'r', encoding='utf-8') as f:
-            css_content = f.read()
-    except FileNotFoundError:
-        print("⚠️ Avertissement : Le fichier static/style.css n'a pas été trouvé. Le rapport ne sera pas stylisé.")
-
     def get_remediation_html(item_data):
         remediation_id = item_data.get('remediation_id')
         if remediation_id and remediation_id in REMEDIATION_ADVICE:
@@ -141,40 +126,33 @@ def generate_html_report(results, hostname, output_dir="."):
         for point in data.get('points_a_corriger', []):
             rows += f"<tr><td>{point.get('criticite')}</td><td>{point.get('message')}</td><td>{get_remediation_html(point)}</td></tr>"
 
-        details_html = "<h4>Détails techniques:</h4><ul>"
-        if 'details' in data:
-            for key, value in data['details'].items():
-                if key == 'chaine_de_certificats':
-                    certs = value
-                    details_html += "<li><strong>Chaîne de certificats:</strong><div class='certificate-table-container'><table>"
+        details = data.get('details', {})
+        crypto_details_html = "<ul>"
+        if 'force_cle_publique' in details:
+            crypto_details_html += f"<li><strong>Force Clé Publique:</strong> {details['force_cle_publique']}</li>"
+        if 'algorithme_signature' in details:
+            crypto_details_html += f"<li><strong>Algorithme Signature:</strong> {details['algorithme_signature']}</li>"
+        crypto_details_html += "</ul>"
 
-                    # Headers
-                    details_html += "<tr>"
-                    for i in range(len(certs)):
-                        details_html += f"<th>Certificat #{i+1}</th>"
-                    details_html += "</tr>"
+        chain_html = ""
+        certs = details.get('chaine_de_certificats', [])
+        if certs:
+            chain_html += "<h4>Chaîne de certificats:</h4><div class='certificate-chain-container'>"
+            for i, cert in enumerate(certs):
+                is_problematic = cert.get('is_problematic', False)
+                problem_style = "style='border-left: 4px solid #c62828;'" if is_problematic else ""
+                chain_html += f"<div class='certificate-card' {problem_style}>"
+                chain_html += f"<h5>Certificat #{i+1}</h5>"
+                chain_html += f"<strong>Sujet:</strong> {cert.get('subject_cn', 'N/A')}<br>"
+                chain_html += f"<strong>Émetteur:</strong> {cert.get('issuer_cn', 'N/A')}<br>"
+                chain_html += f"<strong>Délivré le:</strong> {cert.get('issued', 'N/A')}<br>"
+                chain_html += f"<strong>Expire le:</strong> {cert.get('expires', 'N/A')}<br>"
+                if is_problematic:
+                    chain_html += f"<div class='cert-explanation'><strong>Statut:</strong> {cert.get('explanation', '')}</div>"
+                chain_html += "</div>"
+            chain_html += "</div>"
 
-                    # Rows for each attribute
-                    attributes = [
-                        ("subject_cn", "Sujet"),
-                        ("issuer_cn", "Émetteur"),
-                        ("issued", "Délivré le"),
-                        ("expires", "Expire le"),
-                        ("explanation", "Statut")
-                    ]
-
-                    for attr_key, attr_name in attributes:
-                        details_html += f"<tr><td><strong>{attr_name}</strong></td>"
-                        for cert in certs:
-                            is_problematic = cert.get('is_problematic', False) and attr_key == 'explanation'
-                            cell_style = " style='background-color: #ffebee; color: #c62828;'" if is_problematic else ""
-                            details_html += f"<td{cell_style}>{cert.get(attr_key, 'N/A')}</td>"
-                        details_html += "</tr>"
-
-                    details_html += "</table></div></li>"
-                else:
-                    details_html += f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>"
-        details_html += "</ul>"
+        details_html = f"{crypto_details_html}{chain_html}"
 
         return rows + f"<tr><td colspan='3'>{details_html}</td></tr>"
 
@@ -250,6 +228,15 @@ def generate_html_report(results, hostname, output_dir="."):
             if category in results:
                 content += render_category(category, results[category])
         return content
+
+    # Read CSS content to embed it in the report for portability
+    css_content = ""
+    try:
+        # This path assumes the script is run from the project root
+        with open('static/style.css', 'r', encoding='utf-8') as f:
+            css_content = f.read()
+    except FileNotFoundError:
+        print("⚠️ Avertissement : Le fichier static/style.css n'a pas été trouvé. Le rapport ne sera pas stylisé.")
 
     html_content = f'''<!DOCTYPE html>
 <html lang="fr">
