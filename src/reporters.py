@@ -19,7 +19,7 @@ def generate_score_pie_chart(score, grade):
 
     fig, ax = plt.subplots(figsize=(1, 1), dpi=100)
     ax.set_aspect('equal')
-
+    
     values = [score, 100 - score]
     ax.pie(values, colors=[grade_color, '#e9ecef'], startangle=90, wedgeprops=dict(width=0.3))
 
@@ -29,13 +29,13 @@ def generate_score_pie_chart(score, grade):
     fig.savefig(buf, format='png', transparent=True)
     buf.seek(0)
     plt.close(fig)
-
+    
     return base64.b64encode(buf.getvalue()).decode('utf-8')
 
 def get_critical_issues_summary(results):
     """Extrait les deux premiers problèmes critiques (statut ERROR) pour le résumé."""
     critical_issues = []
-
+    
     def find_errors(data):
         if len(critical_issues) >= 2:
             return
@@ -50,7 +50,7 @@ def get_critical_issues_summary(results):
                 message = data.get('message')
                 if message and message not in critical_issues:
                     critical_issues.append(message)
-
+            
             for key, value in data.items():
                 if len(critical_issues) < 2:
                     find_errors(value)
@@ -233,13 +233,10 @@ def generate_html_report(results, hostname, output_dir="."):
 
     css_content = ""
     try:
-        # Build a robust path to the CSS file relative to this script's location
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        css_path = os.path.join(script_dir, '..', 'static', 'style.css')
-        with open(css_path, 'r', encoding='utf-8') as f:
+        with open('static/style.css', 'r', encoding='utf-8') as f:
             css_content = f.read()
     except FileNotFoundError:
-        print(f"⚠️ Avertissement : Le fichier CSS n'a pas été trouvé. Le rapport ne sera pas stylisé.")
+        print("⚠️ Avertissement : Le fichier static/style.css n'a pas été trouvé. Le rapport ne sera pas stylisé.")
 
     html_content = f'''<!DOCTYPE html>
 <html lang="fr">
