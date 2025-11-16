@@ -4,7 +4,64 @@ import json
 import csv
 import copy
 from datetime import datetime, timezone
+import matplotlib.pyplot as plt
+import io
+import base64
 from .config import REMEDIATION_ADVICE
+
+def generate_score_pie_chart(score, grade):
+    """Génère un graphique en camembert pour le score et retourne une image encodée en Base64."""
+    colors = {
+        'A': '#28a745', 'B': '#fd7e14', 'C': '#ffc107',
+        'D': '#dc3545', 'E': '#dc3545', 'F': '#dc3545'
+    }
+    grade_color = colors.get(grade, '#6c757d')
+
+    fig, ax = plt.subplots(figsize=(1, 1), dpi=100)
+    ax.set_aspect('equal')
+    
+    values = [score, 100 - score]
+    ax.pie(values, colors=[grade_color, '#e9ecef'], startangle=90, wedgeprops=dict(width=0.3))
+
+    ax.text(0, 0, grade, ha='center', va='center', fontsize=20, fontweight='bold', color=grade_color)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', transparent=True)
+    buf.seek(0)
+    plt.close(fig)
+    
+    return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+def get_critical_issues_summary(results):
+    """Extrait les deux premiers problèmes critiques (statut ERROR) pour le résumé."""
+    critical_issues = []
+    
+    def find_errors(data):
+        if len(critical_issues) >= 2:
+            return
+
+        if isinstance(data, dict):
+            if 'points_a_corriger' in data:
+                for point in data['points_a_corriger']:
+                    if point.get('criticite') in ['HIGH', 'CRITICAL']:
+                         critical_issues.append(point.get('message'))
+                         if len(critical_issues) >= 2: return
+            elif data.get('statut') == 'ERROR':
+                message = data.get('message')
+                if message and message not in critical_issues:
+                    critical_issues.append(message)
+            
+            for key, value in data.items():
+                if len(critical_issues) < 2:
+                    find_errors(value)
+
+        elif isinstance(data, list):
+            for item in data:
+                if len(critical_issues) < 2:
+                    find_errors(item)
+
+    find_errors(results)
+    return "; ".join(critical_issues)
 
 def generate_json_report(results, hostname, output_dir="."):
     os.makedirs(output_dir, exist_ok=True)
@@ -174,127 +231,20 @@ def generate_html_report(results, hostname, output_dir="."):
                 content += render_category(category, results[category])
         return content
 
+    css_content = ""
+    try:
+        with open('static/style.css', 'r', encoding='utf-8') as f:
+            css_content = f.read()
+    except FileNotFoundError:
+        print("⚠️ Avertissement : Le fichier static/style.css n'a pas été trouvé. Le rapport ne sera pas stylisé.")
+
     html_content = f'''<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <title>Rapport de Sécurité - {hostname}</title>
     <style>
-        /* Timestamp: {datetime.now(timezone.utc).isoformat()} */
-        body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            color: #333;
-            line-height: 1.6;
-            background-color: #f4f4f9;
-        }}
-        .container {{
-            width: 90%;
-            margin: 0 auto;
-            padding: 20px;
-        }}
-        header {{
-            background-color: #2c3e50;
-            color: white;
-            padding: 20px 0;
-            text-align: center;
-            margin-bottom: 30px;
-        }}
-        h1, h2, h3 {{
-            color: #2c3e50;
-        }}
-        .report-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-        }}
-        .report-group {{
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            padding: 20px;
-            margin-bottom: 20px;
-        }}
-        .grading-table {{
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }}
-        .grading-table th, .grading-table td {{
-            border: 1px solid #ddd;
-            padding: 12px;
-            text-align: left;
-        }}
-        .grading-table th {{
-            background-color: #f8f9fa;
-        }}
-        .grading-table tr:nth-child(even) {{
-            background-color: #f2f2f2;
-        }}
-        .summary {{
-            background-color: #e8f4fc;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }}
-        .score {{
-            font-size: 1.2em;
-            font-weight: bold;
-            color: #007bff;
-        }}
-        .remediation-advice {{
-            background-color: #fff3cd;
-            border-left: 4px solid #ffeeba;
-            padding: 10px;
-            margin-top: 10px;
-        }}
-        .certificate-chain {{
-            margin-top: 10px;
-        }}
-        .certificate-table-container table {{
-            width: 100%;
-            border-collapse: collapse;
-        }}
-        .certificate-table-container th, .certificate-table-container td {{
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }}
-        .certificate-table-container th {{
-            background-color: #f2f2f2;
-        }}
-        .certificate-table-container td strong {{
-            display: block;
-        }}
-        .certificate-chain-container {{
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-        }}
-        .certificate-card {{
-            background-color: #f8f9fa;
-            border-left: 4px solid #17a2b8;
-            padding: 15px;
-            border-radius: 5px;
-            flex: 1;
-            min-width: 280px;
-        }}
-        .cert-explanation {{
-            margin-top: 10px;
-            padding: 8px;
-            background-color: #ffebee;
-            border-left: 3px solid #c62828;
-            color: #c62828;
-        }}
-        footer {{
-            background-color: #2c3e50;
-            color: white;
-            text-align: center;
-            padding: 10px 0;
-            margin-top: 30px;
-        }}
+        {css_content}
     </style>
 </head>
 <body>
@@ -302,13 +252,14 @@ def generate_html_report(results, hostname, output_dir="."):
         <h1>Rapport de Sécurité - {hostname}</h1>
     </header>
     <div class="container">
-        <div class="report-header">
-            <div class="header-main">
-                <h2>Résumé de l'analyse</h2>
-                <p>Date de l'analyse: {datetime.now().strftime('%d/%m/%Y')}</p>
+        <div class="score-summary-card">
+            <div class="chart">
+                <img src="data:image/png;base64,{generate_score_pie_chart(score, grade)}" alt="Score: {grade}" />
             </div>
-            <div class="header-sidebar">
-                <div class="score">Score de sécurité : {grade}</div>
+            <div class="details">
+                <h2>Score global</h2>
+                <div class="score-display">{grade} — {int(score)}%</div>
+                <div class="issues">{get_critical_issues_summary(results)}</div>
             </div>
         </div>
 
