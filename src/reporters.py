@@ -4,7 +4,64 @@ import json
 import csv
 import copy
 from datetime import datetime, timezone
+import matplotlib.pyplot as plt
+import io
+import base64
 from .config import REMEDIATION_ADVICE
+
+def generate_score_pie_chart(score, grade):
+    """Génère un graphique en camembert pour le score et retourne une image encodée en Base64."""
+    colors = {
+        'A': '#28a745', 'B': '#fd7e14', 'C': '#ffc107',
+        'D': '#dc3545', 'E': '#dc3545', 'F': '#dc3545'
+    }
+    grade_color = colors.get(grade, '#6c757d')
+
+    fig, ax = plt.subplots(figsize=(1, 1), dpi=100)
+    ax.set_aspect('equal')
+
+    values = [score, 100 - score]
+    ax.pie(values, colors=[grade_color, '#e9ecef'], startangle=90, wedgeprops=dict(width=0.3))
+
+    ax.text(0, 0, grade, ha='center', va='center', fontsize=20, fontweight='bold', color=grade_color)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', transparent=True)
+    buf.seek(0)
+    plt.close(fig)
+
+    return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+def get_critical_issues_summary(results):
+    """Extrait les deux premiers problèmes critiques (statut ERROR) pour le résumé."""
+    critical_issues = []
+
+    def find_errors(data):
+        if len(critical_issues) >= 2:
+            return
+
+        if isinstance(data, dict):
+            if 'points_a_corriger' in data:
+                for point in data['points_a_corriger']:
+                    if point.get('criticite') in ['HIGH', 'CRITICAL']:
+                         critical_issues.append(point.get('message'))
+                         if len(critical_issues) >= 2: return
+            elif data.get('statut') == 'ERROR':
+                message = data.get('message')
+                if message and message not in critical_issues:
+                    critical_issues.append(message)
+
+            for key, value in data.items():
+                if len(critical_issues) < 2:
+                    find_errors(value)
+
+        elif isinstance(data, list):
+            for item in data:
+                if len(critical_issues) < 2:
+                    find_errors(item)
+
+    find_errors(results)
+    return "; ".join(critical_issues)
 
 def generate_json_report(results, hostname, output_dir="."):
     os.makedirs(output_dir, exist_ok=True)
@@ -71,40 +128,33 @@ def generate_html_report(results, hostname, output_dir="."):
         for point in data.get('points_a_corriger', []):
             rows += f"<tr><td>{point.get('criticite')}</td><td>{point.get('message')}</td><td>{get_remediation_html(point)}</td></tr>"
 
-        details_html = "<h4>Détails techniques:</h4><ul>"
-        if 'details' in data:
-            for key, value in data['details'].items():
-                if key == 'chaine_de_certificats':
-                    certs = value
-                    details_html += "<li><strong>Chaîne de certificats:</strong><div class='certificate-table-container'><table>"
+        details = data.get('details', {})
+        crypto_details_html = "<ul>"
+        if 'force_cle_publique' in details:
+            crypto_details_html += f"<li><strong>Force Clé Publique:</strong> {details['force_cle_publique']}</li>"
+        if 'algorithme_signature' in details:
+            crypto_details_html += f"<li><strong>Algorithme Signature:</strong> {details['algorithme_signature']}</li>"
+        crypto_details_html += "</ul>"
 
-                    # Headers
-                    details_html += "<tr>"
-                    for i in range(len(certs)):
-                        details_html += f"<th>Certificat #{i+1}</th>"
-                    details_html += "</tr>"
+        chain_html = ""
+        certs = details.get('chaine_de_certificats', [])
+        if certs:
+            chain_html += "<h4>Chaîne de certificats:</h4><div class='certificate-chain-container'>"
+            for i, cert in enumerate(certs):
+                is_problematic = cert.get('is_problematic', False)
+                problem_style = "style='border-left: 4px solid #c62828;'" if is_problematic else ""
+                chain_html += f"<div class='certificate-card' {problem_style}>"
+                chain_html += f"<h5>Certificat #{i+1}</h5>"
+                chain_html += f"<strong>Sujet:</strong> {cert.get('subject_cn', 'N/A')}<br>"
+                chain_html += f"<strong>Émetteur:</strong> {cert.get('issuer_cn', 'N/A')}<br>"
+                chain_html += f"<strong>Délivré le:</strong> {cert.get('issued', 'N/A')}<br>"
+                chain_html += f"<strong>Expire le:</strong> {cert.get('expires', 'N/A')}<br>"
+                if is_problematic:
+                    chain_html += f"<div class='cert-explanation'><strong>Statut:</strong> {cert.get('explanation', '')}</div>"
+                chain_html += "</div>"
+            chain_html += "</div>"
 
-                    # Rows for each attribute
-                    attributes = [
-                        ("subject_cn", "Sujet"),
-                        ("issuer_cn", "Émetteur"),
-                        ("issued", "Délivré le"),
-                        ("expires", "Expire le"),
-                        ("explanation", "Statut")
-                    ]
-
-                    for attr_key, attr_name in attributes:
-                        details_html += f"<tr><td><strong>{attr_name}</strong></td>"
-                        for cert in certs:
-                            is_problematic = cert.get('is_problematic', False) and attr_key == 'explanation'
-                            cell_style = " style='background-color: #ffebee; color: #c62828;'" if is_problematic else ""
-                            details_html += f"<td{cell_style}>{cert.get(attr_key, 'N/A')}</td>"
-                        details_html += "</tr>"
-
-                    details_html += "</table></div></li>"
-                else:
-                    details_html += f"<li><strong>{key.replace('_', ' ').title()}:</strong> {value}</li>"
-        details_html += "</ul>"
+        details_html = f"{crypto_details_html}{chain_html}"
 
         return rows + f"<tr><td colspan='3'>{details_html}</td></tr>"
 
@@ -181,106 +231,23 @@ def generate_html_report(results, hostname, output_dir="."):
                 content += render_category(category, results[category])
         return content
 
+    css_content = ""
+    try:
+        # Build a robust path to the CSS file relative to this script's location
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        css_path = os.path.join(script_dir, '..', 'static', 'style.css')
+        with open(css_path, 'r', encoding='utf-8') as f:
+            css_content = f.read()
+    except FileNotFoundError:
+        print(f"⚠️ Avertissement : Le fichier CSS n'a pas été trouvé. Le rapport ne sera pas stylisé.")
+
     html_content = f'''<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <title>Rapport de Sécurité - {hostname}</title>
     <style>
-        body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            color: #333;
-            line-height: 1.6;
-            background-color: #f4f4f9;
-        }}
-        .container {{
-            width: 90%;
-            margin: 0 auto;
-            padding: 20px;
-        }}
-        header {{
-            background-color: #2c3e50;
-            color: white;
-            padding: 20px 0;
-            text-align: center;
-            margin-bottom: 30px;
-        }}
-        h1, h2, h3 {{
-            color: #2c3e50;
-        }}
-        .report-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-        }}
-        .report-group {{
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            padding: 20px;
-            margin-bottom: 20px;
-        }}
-        .grading-table {{
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }}
-        .grading-table th, .grading-table td {{
-            border: 1px solid #ddd;
-            padding: 12px;
-            text-align: left;
-        }}
-        .grading-table th {{
-            background-color: #f8f9fa;
-        }}
-        .grading-table tr:nth-child(even) {{
-            background-color: #f2f2f2;
-        }}
-        .summary {{
-            background-color: #e8f4fc;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }}
-        .score {{
-            font-size: 1.2em;
-            font-weight: bold;
-            color: #007bff;
-        }}
-        .remediation-advice {{
-            background-color: #fff3cd;
-            border-left: 4px solid #ffeeba;
-            padding: 10px;
-            margin-top: 10px;
-        }}
-        .certificate-chain {{
-            margin-top: 10px;
-        }}
-        .certificate-table-container table {{
-            width: 100%;
-            border-collapse: collapse;
-        }}
-        .certificate-table-container th, .certificate-table-container td {{
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }}
-        .certificate-table-container th {{
-            background-color: #f2f2f2;
-        }}
-        .certificate-table-container td strong {{
-            display: block;
-        }}
-        footer {{
-            background-color: #2c3e50;
-            color: white;
-            text-align: center;
-            padding: 10px 0;
-            margin-top: 30px;
-        }}
+        {css_content}
     </style>
 </head>
 <body>
@@ -288,13 +255,14 @@ def generate_html_report(results, hostname, output_dir="."):
         <h1>Rapport de Sécurité - {hostname}</h1>
     </header>
     <div class="container">
-        <div class="report-header">
-            <div class="header-main">
-                <h2>Résumé de l'analyse</h2>
-                <p>Date de l'analyse: {datetime.now().strftime('%d/%m/%Y')}</p>
+        <div class="score-summary-card">
+            <div class="chart">
+                <img src="data:image/png;base64,{generate_score_pie_chart(score, grade)}" alt="Score: {grade}" />
             </div>
-            <div class="header-sidebar">
-                <div class="score">Score de sécurité : {grade}</div>
+            <div class="details">
+                <h2>Score global</h2>
+                <div class="score-display">{grade} — {int(score)}%</div>
+                <div class="issues">{get_critical_issues_summary(results)}</div>
             </div>
         </div>
 
