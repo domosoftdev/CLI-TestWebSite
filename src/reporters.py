@@ -232,11 +232,13 @@ def generate_html_report(results, hostname, output_dir="."):
     # Read CSS content to embed it in the report for portability
     css_content = ""
     try:
-        # This path assumes the script is run from the project root
-        with open('static/style.css', 'r', encoding='utf-8') as f:
+        # Build a robust path to the CSS file relative to this script's location
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        css_path = os.path.join(script_dir, '..', 'static', 'style.css')
+        with open(css_path, 'r', encoding='utf-8') as f:
             css_content = f.read()
     except FileNotFoundError:
-        print("⚠️ Avertissement : Le fichier static/style.css n'a pas été trouvé. Le rapport ne sera pas stylisé.")
+        print(f"⚠️ Avertissement : Le fichier CSS n'a pas été trouvé. Le rapport ne sera pas stylisé.")
 
     html_content = f'''<!DOCTYPE html>
 <html lang="fr">
